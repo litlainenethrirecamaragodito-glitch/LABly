@@ -521,32 +521,43 @@ class LABlySystem:
                 print("Invalid scope.")
                 return
 
-            interval = None
+            intervals = None
             if block_type == "2":
                 for index, session in enumerate(self.LAB_INTERVALS, 1):
                     print(f"{index}. {session}")
-                session_choice = self.read_choice("Select session: ")
-                if not session_choice.isdigit() or not (
-                    1 <= int(session_choice) <= len(self.LAB_INTERVALS)
+                session_choices = self.read_choice(
+                    "Select session number(s), separated by commas: "
+                )
+                session_numbers = [part.strip() for part in session_choices.split(",")]
+                if not session_numbers or any(
+                    not number.isdigit()
+                    or not 1 <= int(number) <= len(self.LAB_INTERVALS)
+                    for number in session_numbers
                 ):
-                    print("Invalid session.")
+                    print("Invalid session selection.")
                     return
-                interval = self.LAB_INTERVALS[int(session_choice) - 1]
+
+                intervals = []
+                for number in session_numbers:
+                    interval = self.LAB_INTERVALS[int(number) - 1]
+                    if interval not in intervals:
+                        intervals.append(interval)
 
             reason = self.read_choice("Reason laboratory cannot be conducted: ").strip()
             if not reason:
                 print("Reason cannot be empty.")
                 return
-            if interval is None:
+            if intervals is None:
                 self.blocked_laboratory_dates[(scope, blocked_date)] = reason
                 print(f"Blocked {scope_name} for the entire day on {blocked_date}. "
                       f"Reason: {reason}")
             else:
-                self.blocked_laboratory_sessions[
-                    (scope, blocked_date, interval)
-                ] = reason
-                print(f"Blocked {scope_name} session {interval} on {blocked_date}. "
-                      f"Reason: {reason}")
+                for interval in intervals:
+                    self.blocked_laboratory_sessions[
+                        (scope, blocked_date, interval)
+                    ] = reason
+                    print(f"Blocked {scope_name} session {interval} on {blocked_date}. "
+                          f"Reason: {reason}")
         elif choice == "5":
             blocked_date = self.read_choice("Date to unblock (YYYY-MM-DD): ").strip()
             try:
@@ -585,16 +596,40 @@ class LABlySystem:
             else:
                 for index, session in enumerate(self.LAB_INTERVALS, 1):
                     print(f"{index}. {session}")
-                session_choice = self.read_choice("Select session: ")
-                if not session_choice.isdigit() or not (
-                    1 <= int(session_choice) <= len(self.LAB_INTERVALS)
+                session_choices = self.read_choice(
+                    "Select session number(s), separated by commas: "
+                )
+                session_numbers = [part.strip() for part in session_choices.split(",")]
+                if not session_numbers or any(
+                    not number.isdigit()
+                    or not 1 <= int(number) <= len(self.LAB_INTERVALS)
+                    for number in session_numbers
                 ):
-                    print("Invalid session.")
+                    print("Invalid session selection.")
                     return
-                interval = self.LAB_INTERVALS[int(session_choice) - 1]
-                key = (scope, blocked_date, interval)
-                blocks = self.blocked_laboratory_sessions
-                description = f"{scope_name} session {interval}"
+
+                intervals = []
+                for number in session_numbers:
+                    interval = self.LAB_INTERVALS[int(number) - 1]
+                    if interval not in intervals:
+                        intervals.append(interval)
+
+                unblocked = []
+                missing = []
+                for interval in intervals:
+                    key = (scope, blocked_date, interval)
+                    if key in self.blocked_laboratory_sessions:
+                        del self.blocked_laboratory_sessions[key]
+                        unblocked.append(interval)
+                    else:
+                        missing.append(interval)
+
+                if unblocked:
+                    print(f"Unblocked {scope_name} sessions "
+                          f"{', '.join(unblocked)} on {blocked_date}.")
+                if missing:
+                    print(f"No matching block found for: {', '.join(missing)}")
+                return
 
             if key not in blocks:
                 print("No matching block found.")
@@ -1384,14 +1419,24 @@ class LABlyGUI:
         scope.set("All laboratories")
         scope.grid(row=1, column=2, padx=(0, 8))
 
-        tk.Label(block_frame, text="Session").grid(row=0, column=3, sticky="w")
-        session = ttk.Combobox(
-            block_frame,
-            values=self.system.LAB_INTERVALS,
-            state="readonly",
-            width=20,
+        tk.Label(block_frame, text="Sessions (Ctrl-click for multiple)").grid(
+            row=0, column=3, sticky="w"
         )
-        session.grid(row=1, column=3)
+        session_frame = tk.Frame(block_frame)
+        session_frame.grid(row=1, column=3)
+        session_scrollbar = tk.Scrollbar(session_frame, orient="vertical")
+        session_scrollbar.pack(side="right", fill="y")
+        session = tk.Listbox(
+            session_frame,
+            selectmode="extended",
+            height=5,
+            width=22,
+            yscrollcommand=session_scrollbar.set,
+        )
+        for interval in self.system.LAB_INTERVALS:
+            session.insert(tk.END, interval)
+        session.pack(side="left")
+        session_scrollbar.config(command=session.yview)
 
         reason_frame = tk.Frame(window)
         reason_frame.pack(fill="x", padx=20, pady=(8, 0))
@@ -1415,14 +1460,18 @@ class LABlyGUI:
                 self.system.blocked_laboratory_dates[(scope_key, blocked)] = reason.get().strip()
                 description = f"{scope.get()} for the entire day"
             else:
-                if not session.get():
+                selected_indices = session.curselection()
+                if not selected_indices:
                     messagebox.showerror("Session Required",
-                                         "Select the session to block.")
+                                         "Select at least one session to block.")
                     return
-                self.system.blocked_laboratory_sessions[
-                    (scope_key, blocked, session.get())
-                ] = reason.get().strip()
-                description = f"{scope.get()} session {session.get()}"
+                selected_sessions = [session.get(index) for index in selected_indices]
+                for selected_session in selected_sessions:
+                    self.system.blocked_laboratory_sessions[
+                        (scope_key, blocked, selected_session)
+                    ] = reason.get().strip()
+                joined_sessions = ", ".join(selected_sessions)
+                description = f"{scope.get()} session(s): {joined_sessions}"
             messagebox.showinfo("Laboratory Blocked",
                                 f"Blocked {description} on {blocked}.")
 
