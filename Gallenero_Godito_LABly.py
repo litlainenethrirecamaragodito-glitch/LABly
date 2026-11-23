@@ -341,7 +341,3 @@ class SchoolSystem:
                     print("Thank you very much for contributing to the database.")
                 case _:
                     print("Invalid, please choose again.")
-
-if __name__ == "__main__":
-    system = SchoolSystem()
-    system.run()
