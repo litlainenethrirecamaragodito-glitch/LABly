@@ -1,337 +1,513 @@
 """
-==============================================================================
-    CS 5 (Q2, SY 26-27)
-    Name : Gallenero, Danillen M. & Godito, Litlaine Nethri R.
-    Section : G12 QUANTUM
-==============================================================================
+LABly - Laboratory Reservation and Resource Management System
+Console application for students/users and administrators.
 """
 
-from datetime import date
 
-class HealthRecord:
-    def __init__(self, date, symptoms):
-        self.date = date
-        self.symptoms = symptoms  # List of symptom strings
-    
-class Student:
-    def __init__(self, name, grade, section):
-        self.name = name
-        self.grade = grade
-        self.section = section
-        self.records = []
-
-    def add_record(self, record):
-        self.records.append(record)
-
-    def __str__(self):
-        return f"Grade {self.grade} - {self.section}"
-
-
-class SchoolSystem:
+class LABlySystem:
     def __init__(self):
-        # Dictionary mapping name to Student object for O(1) lookups
-        self.students = {}
-        
-        self.valid_sections = {
-            "7": ["Diamond", "Emerald", "Ruby"],
-            "8": ["Jasmin", "Sampaguita", "Waling-Waling"],
-            "9": ["Lithium", "Potassium", "Sodium"],
-            "10": ["Gluon", "Graviton", "Muon"],
-            "11": ["Polaris", "Rigel", "Sirius"],
-            "12": ["Byte", "Quantum", "Qubit"]
+        self.users = {}
+        self.admins = {
+            "admin": {"password": "admin123", "name": "Main Administrator"},
         }
 
-    def rules_and_guidelines(self):
-        print("\n\n-----------Rules and Guidelines-----------\n" \
-        "      1. When sick\n" \
-        "      2. When using the clinic\n" \
-        "      3. When requesting for items\n" \
-        "      4. Back to Main Menu")
-        thischoice = input("\n\nPlease input your number of choice: ")
-        while not thischoice.isnumeric(): #loop until user inputs a number
-            thischoice = input("Invalid. Please input your number of choice: ")
-        match thischoice:
-            case "1":
-                print("\n\n===================When Sick===================\n"\
-                    "If you are experiencing symptoms that may affect others, avoid unnecessary close contact with classmates.\n"\
-                    "Inform your teacher or the clinic if you are unable to attend class because of illness.\n"\
-                    "Follow the instructions and recommendations provided by the school nurse.\n"\
-                    "Do not take medicine without proper authorization or guidance from the school clinic.\n"\
-                    "Seek immediate assistance from the clinic if your symptoms become severe or you feel that you need urgent help.\n\n")
-                input("Enter any key to go back to the main menu: ")
-            case "2":
-                print("\n\n===================When Using the Clinic===================\n"\
-                    "State your name, grade level, section, and reason for visiting.\n"\
-                    "Maintain cleanliness and observe proper hygiene while inside the clinic.\n"\
-                    "Follow the instructions of the school nurse and clinic personnel.\n"\
-                    "Respect the privacy and confidentiality of other students.\n"\
-                    "Avoid unnecessary noise or disturbance inside the clinic.\n"\
-                    "Wait for your turn unless you require urgent medical attention.\n"\
-                    "Return to class only when permitted or advised by the appropriate school personnel.\n\n")
-                input("Enter any key to go back to the main menu: ")
-            case "3":
-                print("\n\n===================When Requesting For Items===================\n"\
-                    "Ask permission from the clinic personnel before taking or requesting any clinic item.\n"\
-                    "Clearly state the item you need and the reason for requesting it.\n"\
-                    "Provide your name, grade level, and section when required.\n"\
-                    "Only request items that are appropriate for their intended purpose.\n"\
-                    "Do not take medicine or medical supplies without authorization.\n"\
-                    "Follow the instructions given by the nurse regarding the proper use of any item provided.\n"\
-                    "Return reusable clinic items after use, if applicable.\n"\
-                    "Report damaged, missing, or improperly stored items to the clinic personnel.\n\n")
-                input("Enter any key to go back to the main menu: ")
-            case "4":
-                print("\n\nYou'll be redirected to the main menu shortly.\n")
-            case _:
-                print("\n\nINVALID. You'll be redirected to the main menu.\n")
+        self.laboratories = [
+            {"id": "LAB-001", "name": "Physics Laboratory", "date": "2026-11-25",
+             "time": "08:00-10:00", "capacity": 30, "booked": 0},
+            {"id": "LAB-002", "name": "Chemistry Laboratory", "date": "2026-11-25",
+             "time": "10:00-12:00", "capacity": 25, "booked": 0},
+            {"id": "LAB-003", "name": "Computer Laboratory", "date": "2026-11-26",
+             "time": "13:00-15:00", "capacity": 40, "booked": 0},
+        ]
+        self.equipment = [
+            {"id": "EQ-001", "name": "Microscope", "category": "Science",
+             "available": 10, "total": 10},
+            {"id": "EQ-002", "name": "Laptop", "category": "Computer",
+             "available": 15, "total": 15},
+            {"id": "EQ-003", "name": "Digital Multimeter", "category": "Electrical",
+             "available": 8, "total": 8},
+            {"id": "EQ-004", "name": "Beaker Set", "category": "Science",
+             "available": 20, "total": 20},
+        ]
+        self.reservations = []
+        self.accountability = []
+        self.logbook = []
+        self.next_reservation_id = 1
 
-    def report_symptoms(self):
-        print("\n\n=========================================")
-        print("  SYMPTOMS REPORT (REPORT/REMOVE/MODIFY  )")
-        print("=========================================\n\n")
+    @staticmethod
+    def pause():
+        input("\nPress Enter to continue...")
 
-        hasdata = False
+    @staticmethod
+    def read_choice(prompt="Please choose a number: "):
+        return input(prompt).strip()
 
-        name = input("Please input your name in this format (Name M.I. Surname): ") 
+    @staticmethod
+    def search_rows(rows, fields):
+        keyword = input("\nSearch (leave blank to show all): ").strip().lower()
+        if not keyword:
+            return rows
+        return [
+            row for row in rows
+            if any(keyword in str(row.get(field, "")).lower() for field in fields)
+        ]
 
-        if name.upper() not in self.students:
-            print("\nName not found. Please make sure you type your name correctly. Creating new record...")
-            self.register_student(name.upper())
-        thischoice = input("\nPlease choose 1 to report a symptom or 2 to remove a previously set symptom or 3 to modify a reported symptom." \
-        "\nPlease input a valid number: ")
-        templist = []
-        if len(self.students[name.upper()].records) >= 1:
-            studentrecord = self.students[name.upper()].records[0].symptoms
-            hasdata = True
-        match thischoice:
-            case "1":
-                while thischoice == "1":
-                    temp = input("\nHow many symptoms will you report? Please input a number: ")
-                    if temp.isnumeric():
-                        for x in range(int(temp)):
-                            thisinput = input("\nPlease input a symptom (one symptom per line): ")
-                            if hasdata:
-                                if thisinput.lower() in studentrecord:
-                                    print("Symptom already listed.")
-                                else:
-                                    studentrecord.append(thisinput.lower())
-                            else:
-                                templist.append(thisinput.lower())
-                        self.add_student_record(name.upper(), str(date.today()), templist)
-                        thischoice = "3"
-                    else:
-                            print("INVALID. Choose number again.")
-                            thischoice = 1
-            case "2":
-                if name.upper() in self.students and len(self.students[name.upper()].records) >= 1:
-                    while thischoice == "2":
-                        print("\nYour reported symptoms are: ")
-                        for symptom in sorted(studentrecord):
-                            print(f"-{symptom}")
-                        thisnum = input("\nHow many symptoms would you like to remove? Please input a number: ")
-                        if thisnum.isnumeric():
-                            if int(thisnum) < len(studentrecord): 
-                                for x in range(int(thisnum)): 
-                                    toremove = input("\nPlease input the exact symptom inputted: ")
-                                    if toremove.lower() in studentrecord:
-                                        studentrecord.remove(toremove.lower())
-                                    else:
-                                        print("INVALID. No matching symptom from records.")
-                                thischoice = 3
-                            elif int(thisnum) == len(studentrecord):
-                                thischoice = input("\nYour inputted number equals your number of symptoms. Would you like to clear your recorded symptoms?\n" \
-                                "Press 1 to confirm you want to clear or press 2 so you can choose your number again. Please input number: ") #if equal just clear all data?
-                                if thischoice == "1":
-                                    self.students.pop(name.upper())
-                                elif thischoice == "2":
-                                    print("Reloading...")
-                                else:
-                                    print("INVALID. Redirecting to choose number again...")
-                                    thischoice = "2"
-                            else:
-                                print("\nInvalid input. Number inputted is greater than number of symptoms. Please choose number again.")
-                        else:
-                            print("INVALID input. Choose number again.")
-                else:
-                    print("\nNo symptoms set. Removal invalid.")
-            case "3":
-                if name.upper() in self.students and len(self.students[name.upper()].records) >= 1:
-                    print("\nYour reported symptoms are: ") #print the symptoms
-                    for symptom in sorted(studentrecord):
-                        print(f"-{symptom}")
-                    toreplace = input("Please input the exact symptom inputted: ").lower()
-                    if toreplace in studentrecord:
-                        studentrecord[studentrecord.index(toreplace)] = input("Please input modification: ").lower()
-                    else:
-                        print("INVALID. No matching symptom from records. Redirecting to menu...")
-                else:
-                    print("No symptoms set. Modification invalid.")            
-            case _:
-                print("INVALID. Redirecting to main menu...")
-        #display most recent addition
+    @staticmethod
+    def sort_rows(rows, fields):
+        print("\nSort by:")
+        for index, field in enumerate(fields, 1):
+            print(f"{index}. {field.replace('_', ' ').title()}")
+        choice = LABlySystem.read_choice("Select field: ")
+        if choice.isdigit() and 1 <= int(choice) <= len(fields):
+            field = fields[int(choice) - 1]
+            direction = LABlySystem.read_choice("1. Ascending  2. Descending: ")
+            reverse = direction == "2"
+            try:
+                return sorted(rows, key=lambda row: str(row.get(field, "")).lower(), reverse=reverse)
+            except AttributeError:
+                return rows
+        return rows
 
-    def register_student(self, name):
-        temp = 1
-        while temp == 1:
-            grade = input("Please input your grade level (numerical): ")
-            
-            # Check if the grade exists in our dictionary
-            if grade in self.valid_sections:
-                allowed_sections = self.valid_sections[grade]
-                section_prompt = f"Please input your section ({'/'.join(allowed_sections)}): "
-                section = input(section_prompt)
-                
-                # Check if the entered section is valid for that grade
-                if section in allowed_sections:
-                    # Instantiate a Student object and add it to our list
-                    new_student = Student(name, grade, section)
-                    self.students[name] = new_student
-                    return True
-                else:
-                    print("Please input a valid section. Choose a grade level again.")
-                    temp = 1
-            else:
-                print("INVALID. Please choose your grade level again.")
-                temp = 1
+    def login(self):
+        print("\n========================================")
+        print("          LABly - Secure Login")
+        print("========================================")
+        print("1. User")
+        print("2. Administrator")
 
-    def add_student_record(self, name, date, symptoms):
-        if name.upper() in self.students:
-            record = HealthRecord(date, symptoms)
-            self.students[name.upper()].add_record(record)
-
-    def general_report(self):
-        print("\n\n=========================================")
-        print("             GENERAL REPORTS             ")
-        print("=========================================\n\n")
-        
-        target_date = input("Please input requested date of data (YYYY-MM-DD): ")
-        
-        matching_students = []
-        # Dynamic grade tallies instead of a global list with hardcoded indices
-        grade_counts = {"7": 0, "8": 0, "9": 0, "10": 0, "11": 0, "12": 0}
-        
-        # Iterate through all registered students and check their records
-        for student in self.students.values():
-            for record in student.records:
-                if record.date == target_date:
-                    matching_students.append((student, record.symptoms))
-                    if student.grade in grade_counts:
-                        grade_counts[student.grade] += 1
-                    break  # Count each student once per date
-
-        if not matching_students:
-            print("No data from requested date or wrong format.")
-            return
-
-        print(f"\nDate: {target_date}")
-        print(f"\nNo. of people with symptoms: {len(matching_students)}")
-        
-        print("\nNo. of people with symptoms per grade level:")
-        # Print in descending order (Grade 12 down to Grade 7) matching your original format
-        for grade in ["12", "11", "10", "9", "8", "7"]:
-            print(f"Grade {grade}: {grade_counts[grade]}")
-            
-        print("\nList of people with symptoms: ")
-        for student, symptoms in matching_students:
-            print(f"Name: {student.name}")
-            for symptom in sorted(symptoms):
-                print(f"- {symptom}")
-
-    def display_students(self):
-        print("\n--- Registered Students ---")
-        if not self.students:
-            print("No students registered yet.")
-        for i, student in enumerate(self.students, 1):
-            print(f"{i}. {student}")
-
-    def find_student(self, input_name):
-            """Replicates your name-matching logic cleanly using object properties."""
-            if input_name in self.students:
-                return self.students[input_name]
-            
-            print("No record found. Redirecting to main menu.")
+        role_choice = self.read_choice("Select role: ")
+        role = "user" if role_choice == "1" else "admin" if role_choice == "2" else None
+        if role is None:
+            print("Invalid role.")
             return None
 
-    def personal_record_menu(self):
-        print("\n\n=========================================")
-        print("            Personal Records             ")
-        print("=========================================\n\n")
-        
-        input_name = input("Please input your name: ")
-        student = self.find_student(input_name.upper())
-        
-        if not student:
+        accounts = self.users if role == "user" else self.admins
+        username = self.read_choice("Username: ").lower()
+        password = input("Password: ")
+
+        if username not in accounts or accounts[username]["password"] != password:
+            print("Invalid username or password.")
+            return None
+
+        print(f"\nLogin successful. Welcome, {accounts[username]['name']} ({role.title()}).")
+        return role, username
+
+    def add_log(self, username, action):
+        self.logbook.append({"username": username, "action": action,
+                             "date": "2026-11-24", "time": "09:00"})
+
+    def request_laboratory(self, username):
+        print("\n--- Available Laboratory Reservations ---")
+        available = [lab for lab in self.laboratories if lab["booked"] < lab["capacity"]]
+        if not available:
+            print("No laboratories are currently available.")
             return
 
-        print(f"\n--- Records for {student.name} ---")
-        if not student.records:
-            print("No medical/symptom records found.")
+        for index, lab in enumerate(available, 1):
+            slots = lab["capacity"] - lab["booked"]
+            print(f"{index}. {lab['id']} - {lab['name']} | {lab['date']} "
+                  f"| {lab['time']} | {slots} slot(s)")
+
+        choice = self.read_choice("Select laboratory number: ")
+        if not choice.isdigit() or not 1 <= int(choice) <= len(available):
+            print("Invalid selection.")
             return
 
-        for record in student.records:
-            print(f"Date symptom/s was/were recorded: {record.date}")
-            for symptom in sorted(record.symptoms):
-                print(f"- {symptom}")
+        lab = available[int(choice) - 1]
+        reservation_id = f"RES-{self.next_reservation_id:04d}"
+        self.next_reservation_id += 1
+        self.reservations.append({
+            "id": reservation_id,
+            "username": username,
+            "type": "Laboratory",
+            "resource": lab["name"],
+            "date": lab["date"],
+            "time": lab["time"],
+            "quantity": 1,
+            "status": "Requested",
+        })
+        lab["booked"] += 1
+        self.add_log(username, f"Requested laboratory reservation {reservation_id}")
+        print(f"Laboratory reservation requested successfully ({reservation_id}).")
 
-    def medical_forms(self):
-        print("\n\n=========================================")
-        print("               MEDICAL FORMS                 ")
-        print("=========================================\n\n")
-        print("Available forms:\n" \
-        "1. Health History and Personal Data Sheet\n" \
-        "2. Physical Examination Form\n" \
-        "3. Dental Health Record\n" \
-        "4. Clinic Admission Slip\n" \
-        "5. Medical/Dental Consent Form\n" \
-        "6. Infectious Disease Monitoring Tool\n" \
-        "7. Health History and Personal Data Sheet")
-        medchoice = input("\nPlease choose a valid number: ")
+    def request_equipment(self, username):
+        print("\n--- Request Equipment Reservation ---")
+        matches = self.search_rows(self.equipment, ["id", "name", "category"])
+        matches = [item for item in matches if item["available"] > 0]
+        if not matches:
+            print("No matching equipment is available.")
+            return
 
-        match medchoice:
-            case "1":
-                print("Please go to this link: https://docs.google.com/document/d/1gMoEfS1M4UzvCKdm89OAEPlWEPMmxCYB/edit?usp=sharing&ouid=115459480952760656709&rtpof=true&sd=true\n")
-            case "2":
-                print("Please go to this link: https://docs.google.com/document/d/1lSQBp222n-cdXRQNVZuSFskms2DM5xnp/edit?usp=sharing&ouid=115459480952760656709&rtpof=true&sd=true\n")
-            case "3":
-                print("Please go to this link: https://docs.google.com/spreadsheets/d/16Zsj8gALeTE0uWL9cFFHg9oTrB0eYGFY/edit?usp=sharing&ouid=115459480952760656709&rtpof=true&sd=true\n")
-            case "4":
-                print("Please go to this link: https://docs.google.com/document/d/1X_fi8IXkIr05335IsyKGXm_blOsFKQEf/edit?usp=sharing&ouid=115459480952760656709&rtpof=true&sd=true\n")
-            case "5":
-                print("Please go to this link: https://docs.google.com/spreadsheets/d/1eEf2x33YUcw5LUDrNhIV2tP545gBM0zW/edit?usp=sharing&ouid=115459480952760656709&rtpof=true&sd=true\n")
-            case "6":
-                print("Please go to this link: https://docs.google.com/spreadsheets/d/1yuaBSmh5rmWm68tVYQxjI8C5owNG4iR3/edit?usp=sharing&ouid=115459480952760656709&rtpof=true&sd=true\n")
-            case "7":
-                print("Please go to this link: https://docs.google.com/document/d/181_3h6ADxg_Kj6Zh8Io3mdNBm6cm4efP/edit?usp=sharing&ouid=115459480952760656709&rtpof=true&sd=true\n")
-            case _:
-                print("INVALID. Redirecting to menu...")
+        for index, item in enumerate(matches, 1):
+            print(f"{index}. {item['id']} - {item['name']} ({item['category']}) "
+                  f"| Available: {item['available']}")
+
+        choice = self.read_choice("Select equipment number: ")
+        if not choice.isdigit() or not 1 <= int(choice) <= len(matches):
+            print("Invalid selection.")
+            return
+
+        quantity_text = self.read_choice("Quantity: ")
+        if not quantity_text.isdigit():
+            print("Quantity must be a number.")
+            return
+        quantity = int(quantity_text)
+        item = matches[int(choice) - 1]
+        if quantity < 1 or quantity > item["available"]:
+            print("Invalid quantity.")
+            return
+
+        date = self.read_choice("Use date (YYYY-MM-DD): ")
+        reservation_id = f"RES-{self.next_reservation_id:04d}"
+        self.next_reservation_id += 1
+        self.reservations.append({
+            "id": reservation_id,
+            "username": username,
+            "type": "Equipment",
+            "resource": item["name"],
+            "date": date,
+            "time": "Not specified",
+            "quantity": quantity,
+            "status": "Requested",
+        })
+        item["available"] -= quantity
+        self.add_log(username, f"Requested equipment reservation {reservation_id}")
+        print(f"Equipment reservation requested successfully ({reservation_id}).")
+
+    def cancel_reservation(self, username):
+        own = [reservation for reservation in self.reservations
+               if reservation["username"] == username]
+        if not own:
+            print("You have no reservations to cancel.")
+            return
+
+        print("\n--- Your Reservations ---")
+        for reservation in own:
+            print(f"{reservation['id']} | {reservation['type']} | "
+                  f"{reservation['resource']} | {reservation['date']} | "
+                  f"{reservation['status']}")
+
+        reservation_id = self.read_choice("Enter reservation ID to cancel: ").upper()
+        reservation = next((item for item in own if item["id"] == reservation_id), None)
+        if reservation is None:
+            print("Reservation not found.")
+            return
+
+        if reservation["type"] == "Equipment":
+            item = next((item for item in self.equipment
+                         if item["name"] == reservation["resource"]), None)
+            if item:
+                item["available"] += reservation["quantity"]
+        else:
+            lab = next((lab for lab in self.laboratories
+                        if lab["name"] == reservation["resource"]), None)
+            if lab:
+                lab["booked"] -= 1
+
+        self.reservations.remove(reservation)
+        self.add_log(username, f"Cancelled reservation {reservation_id}")
+        print("Reservation cancelled.")
+
+    def view_reservations(self, username=None, admin=False):
+        rows = self.reservations if admin else [
+            row for row in self.reservations if row["username"] == username
+        ]
+        if not rows:
+            print("\nNo reservations found.")
+            return
+
+        rows = self.search_rows(rows, ["id", "username", "type", "resource",
+                                       "date", "time", "status"])
+        rows = self.sort_rows(rows, ["id", "username", "type", "resource",
+                                     "date", "time", "status"])
+        print("\n--- Reservations ---")
+        for reservation in rows:
+            print(f"{reservation['id']} | {reservation['username']} | "
+                  f"{reservation['type']} | {reservation['resource']} | "
+                  f"{reservation['date']} | {reservation['time']} | "
+                  f"{reservation['quantity']} | {reservation['status']}")
+
+    def accountability_form(self, username):
+        print("\n--- Accountability Form ---")
+        name = self.read_choice("Borrower name: ")
+        resource = self.read_choice("Resource/equipment borrowed: ")
+        quantity_text = self.read_choice("Quantity: ")
+        condition = self.read_choice("Condition upon return (Good/Damaged/Missing): ")
+        remarks = self.read_choice("Remarks: ")
+        if not quantity_text.isdigit():
+            print("Quantity must be a number.")
+            return
+
+        entry = {
+            "username": username,
+            "name": name,
+            "resource": resource,
+            "quantity": int(quantity_text),
+            "condition": condition,
+            "remarks": remarks,
+        }
+        self.accountability.append(entry)
+        self.add_log(username, f"Submitted accountability for {resource}")
+        print("Accountability form submitted.")
+
+    def view_available_resources(self):
+        print("\n--- Available Resources ---")
+        resources = [
+            {**item, "resource_type": "Equipment"}
+            for item in self.equipment
+        ] + [
+            {**lab, "resource_type": "Laboratory",
+             "available": lab["capacity"] - lab["booked"]}
+            for lab in self.laboratories
+        ]
+        resources = self.search_rows(resources, ["id", "name", "category",
+                                                 "resource_type"])
+        resources = self.sort_rows(resources, ["id", "name", "resource_type", "available"])
+        for resource in resources:
+            print(f"{resource['id']} | {resource['resource_type']} | "
+                  f"{resource['name']} | Available: {resource['available']}")
+
+    def view_logbook(self, username=None, admin=False):
+        rows = self.logbook if admin else [
+            entry for entry in self.logbook if entry["username"] == username
+        ]
+        if not rows:
+            print("\nLogbook is empty.")
+            return
+        rows = self.search_rows(rows, ["username", "action", "date", "time"])
+        rows = self.sort_rows(rows, ["username", "action", "date", "time"])
+        print("\n--- Logbook ---")
+        for entry in rows:
+            print(f"{entry['date']} {entry['time']} | {entry['username']} | "
+                  f"{entry['action']}")
+
+    def set_laboratory_reservations(self):
+        print("\n--- Set Available Laboratory Reservations ---")
+        print("1. Add laboratory schedule")
+        print("2. Remove laboratory schedule")
+        print("3. Edit laboratory capacity")
+        choice = self.read_choice("Select action: ")
+
+        if choice == "1":
+            lab_id = self.read_choice("Laboratory ID: ").upper()
+            name = self.read_choice("Laboratory name: ")
+            date = self.read_choice("Date (YYYY-MM-DD): ")
+            time = self.read_choice("Time (HH:MM-HH:MM): ")
+            capacity_text = self.read_choice("Capacity: ")
+            if not capacity_text.isdigit():
+                print("Invalid capacity.")
+                return
+            self.laboratories.append({
+                "id": lab_id,
+                "name": name,
+                "date": date,
+                "time": time,
+                "capacity": int(capacity_text),
+                "booked": 0,
+            })
+            print("Laboratory schedule added.")
+        elif choice == "2":
+            lab_id = self.read_choice("Laboratory ID to remove: ").upper()
+            lab = next((item for item in self.laboratories if item["id"] == lab_id), None)
+            if lab:
+                self.laboratories.remove(lab)
+                print("Laboratory schedule removed.")
+            else:
+                print("Laboratory not found.")
+        elif choice == "3":
+            lab_id = self.read_choice("Laboratory ID: ").upper()
+            lab = next((item for item in self.laboratories if item["id"] == lab_id), None)
+            if lab is None:
+                print("Laboratory not found.")
+                return
+            capacity_text = self.read_choice("New capacity: ")
+            if not capacity_text.isdigit() or int(capacity_text) < lab["booked"]:
+                print("Invalid capacity.")
+                return
+            lab["capacity"] = int(capacity_text)
+            print("Laboratory capacity updated.")
+        else:
+            print("Invalid action.")
+
+    def set_equipment_reservations(self):
+        print("\n--- Set Equipment Reservations ---")
+        print("1. Add equipment")
+        print("2. Update equipment availability")
+        print("3. Remove equipment")
+        choice = self.read_choice("Select action: ")
+
+        if choice == "1":
+            item_id = self.read_choice("Equipment ID: ").upper()
+            name = self.read_choice("Equipment name: ")
+            category = self.read_choice("Category: ")
+            quantity_text = self.read_choice("Total quantity: ")
+            if not quantity_text.isdigit():
+                print("Invalid quantity.")
+                return
+            quantity = int(quantity_text)
+            self.equipment.append({
+                "id": item_id,
+                "name": name,
+                "category": category,
+                "available": quantity,
+                "total": quantity,
+            })
+            print("Equipment added.")
+        elif choice == "2":
+            item_id = self.read_choice("Equipment ID: ").upper()
+            item = next((entry for entry in self.equipment if entry["id"] == item_id), None)
+            if item is None:
+                print("Equipment not found.")
+                return
+            quantity_text = self.read_choice("Available quantity: ")
+            if not quantity_text.isdigit() or int(quantity_text) > item["total"]:
+                print("Invalid quantity.")
+                return
+            item["available"] = int(quantity_text)
+            print("Equipment availability updated.")
+        elif choice == "3":
+            item_id = self.read_choice("Equipment ID to remove: ").upper()
+            item = next((entry for entry in self.equipment if entry["id"] == item_id), None)
+            if item:
+                self.equipment.remove(item)
+                print("Equipment removed.")
+            else:
+                print("Equipment not found.")
+        else:
+            print("Invalid action.")
+
+    def resource_management(self):
+        print("\n--- Resource Management ---")
+        resources = [
+            {**item, "resource_type": "Equipment"}
+            for item in self.equipment
+        ] + [
+            {**lab, "resource_type": "Laboratory",
+             "available": lab["capacity"] - lab["booked"]}
+            for lab in self.laboratories
+        ]
+        resources = self.search_rows(resources, ["id", "name", "category",
+                                                 "resource_type"])
+        resources = self.sort_rows(resources, ["id", "name", "resource_type",
+                                               "available"])
+        for resource in resources:
+            print(f"{resource['id']} | {resource['resource_type']} | "
+                  f"{resource['name']} | Available: {resource['available']}")
+
+    def add_administrator(self):
+        print("\n--- Add Administrator ---")
+        username = self.read_choice("New administrator username: ").lower()
+        if username in self.admins:
+            print("Administrator username already exists.")
+            return
+        name = self.read_choice("Administrator name: ")
+        password = input("Password: ")
+        if not password:
+            print("Password cannot be empty.")
+            return
+        self.admins[username] = {"password": password, "name": name}
+        print(f"Administrator '{username}' added successfully.")
+
+    def user_menu(self, username):
+        while True:
+            print("\n========================================")
+            print(f"           User Menu: {self.users[username]['name']}")
+            print("========================================")
+            print("1. Request/Cancel Laboratory Reservation")
+            print("2. Request Equipment Reservation (Search)")
+            print("3. View Current Reservations (Search; Sort)")
+            print("4. Accountability Form")
+            print("5. View Available Resources (Search; Sort)")
+            print("6. Logbook System")
+            print("7. Log out")
+
+            choice = self.read_choice("Please choose a number: ")
+            if choice == "1":
+                print("\n1. Request laboratory")
+                print("2. Cancel laboratory/equipment reservation")
+                action = self.read_choice("Select action: ")
+                if action == "1":
+                    self.request_laboratory(username)
+                elif action == "2":
+                    self.cancel_reservation(username)
+                else:
+                    print("Invalid action.")
+            elif choice == "2":
+                self.request_equipment(username)
+            elif choice == "3":
+                self.view_reservations(username=username)
+            elif choice == "4":
+                self.accountability_form(username)
+            elif choice == "5":
+                self.view_available_resources()
+            elif choice == "6":
+                self.view_logbook(username=username)
+            elif choice == "7":
+                self.add_log(username, "Logged out")
+                print("Logged out.")
+                return
+            else:
+                print("Invalid menu choice.")
+
+    def admin_menu(self, username):
+        while True:
+            print("\n========================================")
+            print(f"       Admin Menu: {self.admins[username]['name']}")
+            print("========================================")
+            print("1. Set Available Reservations")
+            print("2. Set Equipment Reservations")
+            print("3. View Current Reservations (Search; Sort)")
+            print("4. Resource Management (Search; Sort)")
+            print("5. Logbook System (Search; Sort)")
+            print("6. Add administrator")
+            print("7. Log out")
+
+            choice = self.read_choice("Please choose a number: ")
+            if choice == "1":
+                self.set_laboratory_reservations()
+            elif choice == "2":
+                self.set_equipment_reservations()
+            elif choice == "3":
+                self.view_reservations(admin=True)
+            elif choice == "4":
+                self.resource_management()
+            elif choice == "5":
+                self.view_logbook(admin=True)
+            elif choice == "6":
+                self.add_administrator()
+            elif choice == "7":
+                self.add_log(username, "Administrator logged out")
+                print("Logged out.")
+                return
+            else:
+                print("Invalid menu choice.")
 
     def run(self):
-        print("\n\n==========================================")
-        print("        Medical Self-Report System")
-        print("==========================================")
-        print("\n A program that allows students to report \n     a symptom they have experienced.")
-        print("\nIntended Users: [School Nurse and Students]")
+        print("\n========================================")
+        print("                 LABly")
+        print(" Laboratory Reservation Management")
+        print("========================================")
 
-        choice = ""
+        while True:
+            print("\n1. Log in")
+            print("2. Exit")
+            choice = self.read_choice("Please choose a number: ")
 
-        while choice != "6":
-            print("\n\n\n------------------------------------------")
-            print("               MAIN MENU            ")
-            print("------------------------------------------")
-            print("[1] Clinic Rules and Guidelines")
-            print("[2] Symptoms (Report/Remove/Modify)")
-            print("[3] Personal Record")
-            print("[4] Medical Forms")
-            print("[5] General Report")
-            print("[6] Exit")
-            choice = input("\nPlease choose a number: ")
+            if choice == "1":
+                login = self.login()
+                if login:
+                    role, username = login
+                    self.add_log(username, "Logged in")
+                    if role == "user":
+                        self.user_menu(username)
+                    else:
+                        self.admin_menu(username)
+            elif choice == "2":
+                print("Thank you for using LABly.")
+                break
+            else:
+                print("Invalid choice.")
 
-            match choice:
-                case "1":
-                    self.rules_and_guidelines() 
-                case "2":
-                    self.report_symptoms()
-                case "3":
-                    self.personal_record_menu()
-                case "4":
-                    self.medical_forms() 
+
+if __name__ == "__main__":
+    LABlySystem().run()
