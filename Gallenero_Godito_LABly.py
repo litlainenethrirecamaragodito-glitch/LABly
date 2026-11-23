@@ -335,9 +335,3 @@ class SchoolSystem:
                     self.personal_record_menu()
                 case "4":
                     self.medical_forms() 
-                case "5":
-                    self.general_report()
-                case "6":
-                    print("Thank you very much for contributing to the database.")
-                case _:
-                    print("Invalid, please choose again.")
