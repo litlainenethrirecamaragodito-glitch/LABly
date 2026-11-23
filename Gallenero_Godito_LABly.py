@@ -3,8 +3,22 @@ LABly - Laboratory Reservation and Resource Management System
 Console application for students/users and administrators.
 """
 
+from datetime import date
+
 
 class LABlySystem:
+    LAB_INTERVALS = (
+        "7:45AM-8:35AM",
+        "8:40AM-9:30AM",
+        "9:45AM-10:35AM",
+        "10:40AM-11:30AM",
+        "12:30PM-1:00PM",
+        "1:00PM-1:50PM",
+        "1:55PM-2:45PM",
+        "2:50PM-3:40PM",
+        "3:45PM-4:35PM",
+    )
+
     def __init__(self):
         self.users = {}
         self.admins = {
@@ -12,12 +26,12 @@ class LABlySystem:
         }
 
         self.laboratories = [
-            {"id": "LAB-001", "name": "Physics Laboratory", "date": "2026-11-25",
-             "time": "08:00-10:00", "capacity": 30, "booked": 0},
-            {"id": "LAB-002", "name": "Chemistry Laboratory", "date": "2026-11-25",
-             "time": "10:00-12:00", "capacity": 25, "booked": 0},
-            {"id": "LAB-003", "name": "Computer Laboratory", "date": "2026-11-26",
-             "time": "13:00-15:00", "capacity": 40, "booked": 0},
+            {"id": "LAB-001", "name": "Chemistry Laboratory 1", "date": "Every day",
+             "time": "All fixed intervals", "capacity": 30, "booked": 0},
+            {"id": "LAB-002", "name": "Chemistry Laboratory 2", "date": "Every day",
+             "time": "All fixed intervals", "capacity": 25, "booked": 0},
+            {"id": "LAB-003", "name": "Computer Laboratory", "date": "Every day",
+             "time": "All fixed intervals", "capacity": 40, "booked": 0},
         ]
         self.equipment = [
             {"id": "EQ-001", "name": "Microscope", "category": "Science",
@@ -76,12 +90,19 @@ class LABlySystem:
         print("2. Administrator")
 
         role_choice = self.read_choice("Select role: ")
-        role = "user" if role_choice == "1" else "admin" if role_choice == "2" else None
-        if role is None:
+        if role_choice == "1":
+            role = "user"
+        elif role_choice == "2":
+            role = "admin"
+        else:
             print("Invalid role.")
             return None
 
-        accounts = self.users if role == "user" else self.admins
+        if role == "user":
+            accounts = self.users
+        else:
+            accounts = self.admins
+
         username = self.read_choice("Username: ").lower()
         password = input("Password: ")
 
@@ -92,28 +113,97 @@ class LABlySystem:
         print(f"\nLogin successful. Welcome, {accounts[username]['name']} ({role.title()}).")
         return role, username
 
+    def register_user(self):
+        print("\n========================================")
+        print("          LABly - Create Account")
+        print("========================================")
+
+        name = self.read_choice("Full name: ").strip()
+        if not name:
+            print("Name cannot be empty.")
+            return
+
+        username = self.read_choice("Choose username: ").strip().lower()
+        if not username:
+            print("Username cannot be empty.")
+            return
+        if username in self.users:
+            print("Username already exists.")
+            return
+
+        password = input("Choose password: ")
+        confirm_password = input("Confirm password: ")
+        if not password:
+            print("Password cannot be empty.")
+            return
+        if password != confirm_password:
+            print("Passwords do not match.")
+            return
+
+        self.users[username] = {"password": password, "name": name}
+        self.add_log(username, "Created a user account")
+        print(f"Account created successfully. You can now log in as '{username}'.")
+
     def add_log(self, username, action):
         self.logbook.append({"username": username, "action": action,
                              "date": "2026-11-24", "time": "09:00"})
 
     def request_laboratory(self, username):
         print("\n--- Available Laboratory Reservations ---")
-        available = [lab for lab in self.laboratories if lab["booked"] < lab["capacity"]]
-        if not available:
-            print("No laboratories are currently available.")
+        if not self.laboratories:
+            print("No laboratories are currently configured.")
             return
 
-        for index, lab in enumerate(available, 1):
-            slots = lab["capacity"] - lab["booked"]
-            print(f"{index}. {lab['id']} - {lab['name']} | {lab['date']} "
-                  f"| {lab['time']} | {slots} slot(s)")
+        reservation_date = self.read_choice("Reservation date (YYYY-MM-DD): ").strip()
+        try:
+            date.fromisoformat(reservation_date)
+        except ValueError:
+            print("Invalid date. Use YYYY-MM-DD.")
+            return
 
-        choice = self.read_choice("Select laboratory number: ")
-        if not choice.isdigit() or not 1 <= int(choice) <= len(available):
+        print("\nSelect laboratory:")
+        for index, lab in enumerate(self.laboratories, 1):
+            print(f"{index}. {lab['id']} - {lab['name']} (Capacity: {lab['capacity']})")
+
+        lab_choice = self.read_choice("Laboratory number: ")
+        if not lab_choice.isdigit() or not 1 <= int(lab_choice) <= len(self.laboratories):
             print("Invalid selection.")
             return
+        lab = self.laboratories[int(lab_choice) - 1]
 
-        lab = available[int(choice) - 1]
+        print("\nAvailable intervals:")
+        for index, interval in enumerate(self.LAB_INTERVALS, 1):
+            print(f"{index}. {interval}")
+
+        interval_choice = self.read_choice("Select interval number: ")
+        if not interval_choice.isdigit() or not 1 <= int(interval_choice) <= len(self.LAB_INTERVALS):
+            print("Invalid interval.")
+            return
+        selected_time = self.LAB_INTERVALS[int(interval_choice) - 1]
+
+        duplicate = any(
+            reservation["username"] == username
+            and reservation["type"] == "Laboratory"
+            and reservation["resource"] == lab["name"]
+            and reservation["date"] == reservation_date
+            and reservation["time"] == selected_time
+            for reservation in self.reservations
+        )
+        if duplicate:
+            print("You already have a reservation for this laboratory, date, and interval.")
+            return
+
+        booked = sum(
+            1 for reservation in self.reservations
+            if reservation["type"] == "Laboratory"
+            and reservation["resource"] == lab["name"]
+            and reservation["date"] == reservation_date
+            and reservation["time"] == selected_time
+        )
+        if booked >= lab["capacity"]:
+            print("This laboratory interval is full.")
+            return
+
         reservation_id = f"RES-{self.next_reservation_id:04d}"
         self.next_reservation_id += 1
         self.reservations.append({
@@ -121,12 +211,11 @@ class LABlySystem:
             "username": username,
             "type": "Laboratory",
             "resource": lab["name"],
-            "date": lab["date"],
-            "time": lab["time"],
+            "date": reservation_date,
+            "time": selected_time,
             "quantity": 1,
             "status": "Requested",
         })
-        lab["booked"] += 1
         self.add_log(username, f"Requested laboratory reservation {reservation_id}")
         print(f"Laboratory reservation requested successfully ({reservation_id}).")
 
@@ -198,11 +287,6 @@ class LABlySystem:
                          if item["name"] == reservation["resource"]), None)
             if item:
                 item["available"] += reservation["quantity"]
-        else:
-            lab = next((lab for lab in self.laboratories
-                        if lab["name"] == reservation["resource"]), None)
-            if lab:
-                lab["booked"] -= 1
 
         self.reservations.remove(reservation)
         self.add_log(username, f"Cancelled reservation {reservation_id}")
@@ -291,8 +375,6 @@ class LABlySystem:
         if choice == "1":
             lab_id = self.read_choice("Laboratory ID: ").upper()
             name = self.read_choice("Laboratory name: ")
-            date = self.read_choice("Date (YYYY-MM-DD): ")
-            time = self.read_choice("Time (HH:MM-HH:MM): ")
             capacity_text = self.read_choice("Capacity: ")
             if not capacity_text.isdigit():
                 print("Invalid capacity.")
@@ -300,8 +382,8 @@ class LABlySystem:
             self.laboratories.append({
                 "id": lab_id,
                 "name": name,
-                "date": date,
-                "time": time,
+                "date": "Every day",
+                "time": "All fixed intervals",
                 "capacity": int(capacity_text),
                 "booked": 0,
             })
@@ -414,10 +496,10 @@ class LABlySystem:
             print(f"           User Menu: {self.users[username]['name']}")
             print("========================================")
             print("1. Request/Cancel Laboratory Reservation")
-            print("2. Request Equipment Reservation (Search)")
-            print("3. View Current Reservations (Search; Sort)")
+            print("2. Request Equipment Reservation")
+            print("3. View Current Reservations")
             print("4. Accountability Form")
-            print("5. View Available Resources (Search; Sort)")
+            print("5. View Available Resources")
             print("6. Logbook System")
             print("7. Log out")
 
@@ -456,9 +538,9 @@ class LABlySystem:
             print("========================================")
             print("1. Set Available Reservations")
             print("2. Set Equipment Reservations")
-            print("3. View Current Reservations (Search; Sort)")
-            print("4. Resource Management (Search; Sort)")
-            print("5. Logbook System (Search; Sort)")
+            print("3. View Current Reservations")
+            print("4. Resource Management")
+            print("5. Logbook System")
             print("6. Add administrator")
             print("7. Log out")
 
@@ -490,7 +572,8 @@ class LABlySystem:
 
         while True:
             print("\n1. Log in")
-            print("2. Exit")
+            print("2. Create user account")
+            print("3. Exit")
             choice = self.read_choice("Please choose a number: ")
 
             if choice == "1":
@@ -503,6 +586,8 @@ class LABlySystem:
                     else:
                         self.admin_menu(username)
             elif choice == "2":
+                self.register_user()
+            elif choice == "3":
                 print("Thank you for using LABly.")
                 break
             else:
