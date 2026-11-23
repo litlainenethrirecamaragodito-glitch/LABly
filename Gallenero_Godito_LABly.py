@@ -33,6 +33,7 @@ class LABlySystem:
             {"id": "LAB-003", "name": "Computer Laboratory", "date": "Every day",
              "time": "All fixed intervals", "capacity": 40, "booked": 0},
         ]
+        self.blocked_laboratory_dates = {}
         self.equipment = [
             {"id": "EQ-001", "name": "Microscope", "category": "Science",
              "available": 10, "total": 10},
@@ -161,6 +162,12 @@ class LABlySystem:
             print("Invalid date. Use YYYY-MM-DD.")
             return
 
+        lab_date = reservation_date
+        all_date_block = self.blocked_laboratory_dates.get(("__ALL__", lab_date))
+        if all_date_block:
+            print(f"This date is not available for laboratory conduct. Reason: {all_date_block}")
+            return
+
         print("\nSelect laboratory:")
         for index, lab in enumerate(self.laboratories, 1):
             print(f"{index}. {lab['id']} - {lab['name']} (Capacity: {lab['capacity']})")
@@ -171,53 +178,77 @@ class LABlySystem:
             return
         lab = self.laboratories[int(lab_choice) - 1]
 
+        lab_date_block = self.blocked_laboratory_dates.get((lab["name"], reservation_date))
+        if lab_date_block:
+            print(f"{lab['name']} is unavailable on this date. Reason: {lab_date_block}")
+            return
+
         print("\nAvailable intervals:")
         for index, interval in enumerate(self.LAB_INTERVALS, 1):
             print(f"{index}. {interval}")
 
-        interval_choice = self.read_choice("Select interval number: ")
-        if not interval_choice.isdigit() or not 1 <= int(interval_choice) <= len(self.LAB_INTERVALS):
-            print("Invalid interval.")
-            return
-        selected_time = self.LAB_INTERVALS[int(interval_choice) - 1]
-
-        duplicate = any(
-            reservation["username"] == username
-            and reservation["type"] == "Laboratory"
-            and reservation["resource"] == lab["name"]
-            and reservation["date"] == reservation_date
-            and reservation["time"] == selected_time
-            for reservation in self.reservations
+        interval_choice = self.read_choice(
+            "Select interval number(s), separated by commas: "
         )
-        if duplicate:
-            print("You already have a reservation for this laboratory, date, and interval.")
+        interval_numbers = [part.strip() for part in interval_choice.split(",")]
+        if not interval_numbers or any(
+            not number.isdigit() or not 1 <= int(number) <= len(self.LAB_INTERVALS)
+            for number in interval_numbers
+        ):
+            print("Invalid interval selection.")
             return
 
-        booked = sum(
-            1 for reservation in self.reservations
-            if reservation["type"] == "Laboratory"
-            and reservation["resource"] == lab["name"]
-            and reservation["date"] == reservation_date
-            and reservation["time"] == selected_time
-        )
-        if booked >= lab["capacity"]:
-            print("This laboratory interval is full.")
-            return
+        selected_intervals = []
+        for number in interval_numbers:
+            interval = self.LAB_INTERVALS[int(number) - 1]
+            if interval not in selected_intervals:
+                selected_intervals.append(interval)
 
-        reservation_id = f"RES-{self.next_reservation_id:04d}"
-        self.next_reservation_id += 1
-        self.reservations.append({
-            "id": reservation_id,
-            "username": username,
-            "type": "Laboratory",
-            "resource": lab["name"],
-            "date": reservation_date,
-            "time": selected_time,
-            "quantity": 1,
-            "status": "Requested",
-        })
-        self.add_log(username, f"Requested laboratory reservation {reservation_id}")
-        print(f"Laboratory reservation requested successfully ({reservation_id}).")
+        created = []
+        skipped = []
+        for selected_time in selected_intervals:
+            duplicate = any(
+                reservation["username"] == username
+                and reservation["type"] == "Laboratory"
+                and reservation["resource"] == lab["name"]
+                and reservation["date"] == reservation_date
+                and reservation["time"] == selected_time
+                for reservation in self.reservations
+            )
+            if duplicate:
+                skipped.append(f"{selected_time} (already reserved)")
+                continue
+
+            booked = sum(
+                1 for reservation in self.reservations
+                if reservation["type"] == "Laboratory"
+                and reservation["resource"] == lab["name"]
+                and reservation["date"] == reservation_date
+                and reservation["time"] == selected_time
+            )
+            if booked >= lab["capacity"]:
+                skipped.append(f"{selected_time} (full)")
+                continue
+
+            reservation_id = f"RES-{self.next_reservation_id:04d}"
+            self.next_reservation_id += 1
+            self.reservations.append({
+                "id": reservation_id,
+                "username": username,
+                "type": "Laboratory",
+                "resource": lab["name"],
+                "date": reservation_date,
+                "time": selected_time,
+                "quantity": 1,
+                "status": "Requested",
+            })
+            created.append((reservation_id, selected_time))
+            self.add_log(username, f"Requested laboratory reservation {reservation_id}")
+
+        for reservation_id, interval in created:
+            print(f"Reservation requested successfully: {reservation_id} | {interval}")
+        for reason in skipped:
+            print(f"Skipped: {reason}")
 
     def request_equipment(self, username):
         print("\n--- Request Equipment Reservation ---")
@@ -370,6 +401,9 @@ class LABlySystem:
         print("1. Add laboratory schedule")
         print("2. Remove laboratory schedule")
         print("3. Edit laboratory capacity")
+        print("4. Block a date")
+        print("5. Unblock a date")
+        print("6. View blocked dates")
         choice = self.read_choice("Select action: ")
 
         if choice == "1":
@@ -408,6 +442,74 @@ class LABlySystem:
                 return
             lab["capacity"] = int(capacity_text)
             print("Laboratory capacity updated.")
+        elif choice == "4":
+            blocked_date = self.read_choice("Date to block (YYYY-MM-DD): ").strip()
+            try:
+                date.fromisoformat(blocked_date)
+            except ValueError:
+                print("Invalid date. Use YYYY-MM-DD.")
+                return
+
+            print("1. All laboratories")
+            for index, lab in enumerate(self.laboratories, 1):
+                print(f"{index + 1}. {lab['name']}")
+            scope_choice = self.read_choice("Select scope: ")
+
+            if scope_choice == "1":
+                scope = "__ALL__"
+                scope_name = "All laboratories"
+            elif scope_choice.isdigit() and 2 <= int(scope_choice) <= len(self.laboratories) + 1:
+                lab = self.laboratories[int(scope_choice) - 2]
+                scope = lab["name"]
+                scope_name = lab["name"]
+            else:
+                print("Invalid scope.")
+                return
+
+            reason = self.read_choice("Reason laboratory cannot be conducted: ").strip()
+            if not reason:
+                print("Reason cannot be empty.")
+                return
+            self.blocked_laboratory_dates[(scope, blocked_date)] = reason
+            print(f"Blocked {scope_name} on {blocked_date}. Reason: {reason}")
+        elif choice == "5":
+            blocked_date = self.read_choice("Date to unblock (YYYY-MM-DD): ").strip()
+            try:
+                date.fromisoformat(blocked_date)
+            except ValueError:
+                print("Invalid date. Use YYYY-MM-DD.")
+                return
+
+            print("1. All laboratories")
+            for index, lab in enumerate(self.laboratories, 1):
+                print(f"{index + 1}. {lab['name']}")
+            scope_choice = self.read_choice("Select scope: ")
+
+            if scope_choice == "1":
+                scope = "__ALL__"
+                scope_name = "All laboratories"
+            elif scope_choice.isdigit() and 2 <= int(scope_choice) <= len(self.laboratories) + 1:
+                lab = self.laboratories[int(scope_choice) - 2]
+                scope = lab["name"]
+                scope_name = lab["name"]
+            else:
+                print("Invalid scope.")
+                return
+
+            key = (scope, blocked_date)
+            if key not in self.blocked_laboratory_dates:
+                print("No matching blocked date found.")
+                return
+            del self.blocked_laboratory_dates[key]
+            print(f"Unblocked {scope_name} on {blocked_date}.")
+        elif choice == "6":
+            print("\n--- Blocked Laboratory Dates ---")
+            if not self.blocked_laboratory_dates:
+                print("No blocked laboratory dates.")
+                return
+            for (scope, blocked_date), reason in sorted(self.blocked_laboratory_dates.items()):
+                scope_name = "All laboratories" if scope == "__ALL__" else scope
+                print(f"{blocked_date} | {scope_name} | Reason: {reason}")
         else:
             print("Invalid action.")
 
