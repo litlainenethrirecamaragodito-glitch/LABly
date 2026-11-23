@@ -68,6 +68,25 @@ class LABlySystem:
         ]
 
     @staticmethod
+    def insertion_sort(rows, key=lambda value: str(value).lower(), reverse=False):
+        sorted_rows = list(rows)
+        for index in range(1, len(sorted_rows)):
+            current = sorted_rows[index]
+            current_key = key(current)
+            position = index - 1
+
+            while position >= 0:
+                previous_key = key(sorted_rows[position])
+                should_move = previous_key < current_key if reverse else previous_key > current_key
+                if not should_move:
+                    break
+                sorted_rows[position + 1] = sorted_rows[position]
+                position -= 1
+
+            sorted_rows[position + 1] = current
+        return sorted_rows
+
+    @staticmethod
     def sort_rows(rows, fields):
         print("\nSort by:")
         for index, field in enumerate(fields, 1):
@@ -78,7 +97,11 @@ class LABlySystem:
             direction = LABlySystem.read_choice("1. Ascending  2. Descending: ")
             reverse = direction == "2"
             try:
-                return sorted(rows, key=lambda row: str(row.get(field, "")).lower(), reverse=reverse)
+                return LABlySystem.insertion_sort(
+                    rows,
+                    key=lambda row: str(row.get(field, "")).lower(),
+                    reverse=reverse,
+                )
             except AttributeError:
                 return rows
         return rows
@@ -507,7 +530,11 @@ class LABlySystem:
             if not self.blocked_laboratory_dates:
                 print("No blocked laboratory dates.")
                 return
-            for (scope, blocked_date), reason in sorted(self.blocked_laboratory_dates.items()):
+            blocked_items = LABlySystem.insertion_sort(
+                list(self.blocked_laboratory_dates.items()),
+                key=lambda item: str(item[0]).lower(),
+            )
+            for (scope, blocked_date), reason in blocked_items:
                 scope_name = "All laboratories" if scope == "__ALL__" else scope
                 print(f"{blocked_date} | {scope_name} | Reason: {reason}")
         else:
@@ -1282,8 +1309,11 @@ class LABlyGUI:
         blocked = tk.Text(window, height=5, width=68)
         blocked.pack()
         if self.system.blocked_laboratory_dates:
-            for (scope_key, blocked_date_value), reason_text in sorted(
-                    self.system.blocked_laboratory_dates.items()):
+            blocked_items = LABlySystem.insertion_sort(
+                list(self.system.blocked_laboratory_dates.items()),
+                key=lambda item: str(item[0]).lower(),
+            )
+            for (scope_key, blocked_date_value), reason_text in blocked_items:
                 scope_name = "All laboratories" if scope_key == "__ALL__" else scope_key
                 blocked.insert("end",
                                f"{blocked_date_value} | {scope_name} | {reason_text}\n")
