@@ -4,6 +4,8 @@ Console application for students/users and administrators.
 """
 
 from datetime import date
+import tkinter as tk
+from tkinter import messagebox, ttk
 
 
 class LABlySystem:
@@ -27,18 +29,16 @@ class LABlySystem:
 
         self.laboratories = [
             {"id": "LAB-001", "name": "Chemistry Laboratory 1", "date": "Every day",
-             "time": "All fixed intervals", "capacity": 30, "booked": 0},
+             "time": "All fixed intervals", "capacity": 6, "booked": 0},
             {"id": "LAB-002", "name": "Chemistry Laboratory 2", "date": "Every day",
-             "time": "All fixed intervals", "capacity": 25, "booked": 0},
+             "time": "All fixed intervals", "capacity": 6, "booked": 0},
             {"id": "LAB-003", "name": "Computer Laboratory", "date": "Every day",
-             "time": "All fixed intervals", "capacity": 40, "booked": 0},
+             "time": "All fixed intervals", "capacity": 6, "booked": 0},
         ]
         self.blocked_laboratory_dates = {}
         self.equipment = [
             {"id": "EQ-001", "name": "Microscope", "category": "Science",
              "available": 10, "total": 10},
-            {"id": "EQ-002", "name": "Laptop", "category": "Computer",
-             "available": 15, "total": 15},
             {"id": "EQ-003", "name": "Digital Multimeter", "category": "Electrical",
              "available": 8, "total": 8},
             {"id": "EQ-004", "name": "Beaker Set", "category": "Science",
@@ -696,5 +696,725 @@ class LABlySystem:
                 print("Invalid choice.")
 
 
+class LABlyGUI:
+    def __init__(self, root, system):
+        self.root = root
+        self.system = system
+        self.role = None
+        self.username = None
+
+        self.root.title("LABly - Laboratory Reservation System")
+        self.root.geometry("760x520")
+        self.root.minsize(700, 480)
+        self.show_login()
+
+    def clear_window(self):
+        for widget in self.root.winfo_children():
+            widget.destroy()
+
+    def show_login(self):
+        self.clear_window()
+        self.role = None
+        self.username = None
+
+        frame = tk.Frame(self.root, padx=30, pady=20)
+        frame.pack(expand=True)
+
+        tk.Label(frame, text="LABly", font=("Arial", 24, "bold")).pack(pady=(0, 5))
+        tk.Label(frame, text="Laboratory Reservation Management",
+                 font=("Arial", 11)).pack(pady=(0, 20))
+
+        tk.Label(frame, text="Role").pack(anchor="w")
+        role = ttk.Combobox(frame, values=["User", "Administrator"],
+                            state="readonly", width=28)
+        role.set("User")
+        role.pack(pady=(0, 10))
+
+        tk.Label(frame, text="Username").pack(anchor="w")
+        username = ttk.Entry(frame, width=30)
+        username.pack(pady=(0, 10))
+
+        tk.Label(frame, text="Password").pack(anchor="w")
+        password = ttk.Entry(frame, width=30, show="*")
+        password.pack(pady=(0, 15))
+
+        def login():
+            selected_role = "user" if role.get() == "User" else "admin"
+            accounts = self.system.users if selected_role == "user" else self.system.admins
+            entered_username = username.get().strip().lower()
+            if entered_username not in accounts:
+                messagebox.showerror("Login Failed", "Invalid username or password.")
+                return
+            if accounts[entered_username]["password"] != password.get():
+                messagebox.showerror("Login Failed", "Invalid username or password.")
+                return
+
+            self.role = selected_role
+            self.username = entered_username
+            self.system.add_log(entered_username, "Logged in")
+            if selected_role == "user":
+                self.show_user_dashboard()
+            else:
+                self.show_admin_dashboard()
+
+        ttk.Button(frame, text="Log In", width=28, command=login).pack(pady=5)
+        ttk.Button(frame, text="Create User Account", width=28,
+                   command=self.show_register_window).pack(pady=5)
+
+    def show_register_window(self):
+        window = tk.Toplevel(self.root)
+        window.title("Create User Account")
+        window.geometry("380x330")
+        window.resizable(False, False)
+
+        tk.Label(window, text="Create Account", font=("Arial", 16, "bold")).pack(pady=15)
+
+        fields = {}
+        for label, hidden in (
+            ("Full Name", False),
+            ("Username", False),
+            ("Password", True),
+            ("Confirm Password", True),
+        ):
+            tk.Label(window, text=label).pack(anchor="w", padx=40)
+            entry = ttk.Entry(window, width=35, show="*" if hidden else "")
+            entry.pack(pady=(0, 8))
+            fields[label] = entry
+
+        def register():
+            name = fields["Full Name"].get().strip()
+            username = fields["Username"].get().strip().lower()
+            password = fields["Password"].get()
+            confirm = fields["Confirm Password"].get()
+
+            if not name or not username:
+                messagebox.showerror("Registration Failed", "Name and username are required.")
+                return
+            if username in self.system.users:
+                messagebox.showerror("Registration Failed", "Username already exists.")
+                return
+            if not password:
+                messagebox.showerror("Registration Failed", "Password cannot be empty.")
+                return
+            if password != confirm:
+                messagebox.showerror("Registration Failed", "Passwords do not match.")
+                return
+
+            self.system.users[username] = {"password": password, "name": name}
+            self.system.add_log(username, "Created a user account")
+            messagebox.showinfo("Registration Complete",
+                                f"Account '{username}' was created successfully.")
+            window.destroy()
+
+        ttk.Button(window, text="Create Account", command=register).pack(pady=12)
+
+    def make_header(self, title):
+        header = tk.Frame(self.root, padx=15, pady=10)
+        header.pack(fill="x")
+        tk.Label(header, text=title, font=("Arial", 18, "bold")).pack(side="left")
+        ttk.Button(header, text="Log Out", command=self.logout).pack(side="right")
+
+    def logout(self):
+        self.system.add_log(self.username, "Logged out")
+        self.show_login()
+
+    def show_user_dashboard(self):
+        self.clear_window()
+        name = self.system.users[self.username]["name"]
+        self.make_header(f"User Dashboard - {name}")
+
+        buttons = tk.Frame(self.root, padx=25, pady=15)
+        buttons.pack(expand=True)
+
+        actions = (
+            ("Request Laboratory Reservation", self.gui_laboratory_reservation),
+            ("Cancel Reservation", self.gui_cancel_reservation),
+            ("Request Equipment Reservation", self.gui_equipment_reservation),
+            ("View Current Reservations", self.gui_reservations),
+            ("Submit Accountability Form", self.gui_accountability),
+            ("View Available Resources", self.gui_resources),
+            ("View Logbook", self.gui_logbook),
+        )
+        for text, command in actions:
+            ttk.Button(buttons, text=text, width=38, command=command).pack(pady=5)
+
+    def gui_laboratory_reservation(self):
+        window = tk.Toplevel(self.root)
+        window.title("Laboratory Reservation")
+        window.geometry("500x430")
+
+        tk.Label(window, text="Reservation Date").pack(anchor="w", padx=30, pady=(15, 3))
+        date_entry = ttk.Entry(window, width=25)
+        date_entry.insert(0, date.today().isoformat())
+        date_entry.pack(anchor="w", padx=30)
+
+        tk.Label(window, text="Laboratory").pack(anchor="w", padx=30, pady=(12, 3))
+        laboratory_names = [lab["name"] for lab in self.system.laboratories]
+        laboratory = ttk.Combobox(window, values=laboratory_names,
+                                  state="readonly", width=38)
+        laboratory.set(laboratory_names[0] if laboratory_names else "")
+        laboratory.pack(anchor="w", padx=30)
+
+        tk.Label(window, text="Intervals (use Ctrl to select multiple)").pack(
+            anchor="w", padx=30, pady=(12, 3)
+        )
+        interval_list = tk.Listbox(window, selectmode="multiple", height=9,
+                                   exportselection=False)
+        for interval in self.system.LAB_INTERVALS:
+            interval_list.insert("end", interval)
+        interval_list.pack(anchor="w", padx=30)
+
+        def reserve():
+            reservation_date = date_entry.get().strip()
+            try:
+                date.fromisoformat(reservation_date)
+            except ValueError:
+                messagebox.showerror("Invalid Date", "Use the YYYY-MM-DD format.")
+                return
+
+            all_block = self.system.blocked_laboratory_dates.get(
+                ("__ALL__", reservation_date)
+            )
+            if all_block:
+                messagebox.showerror("Date Blocked",
+                                     f"Laboratories cannot be conducted on this date.\n"
+                                     f"Reason: {all_block}")
+                return
+
+            lab = next((item for item in self.system.laboratories
+                        if item["name"] == laboratory.get()), None)
+            if lab is None:
+                messagebox.showerror("Invalid Laboratory", "Select a laboratory.")
+                return
+
+            lab_block = self.system.blocked_laboratory_dates.get(
+                (lab["name"], reservation_date)
+            )
+            if lab_block:
+                messagebox.showerror("Date Blocked",
+                                     f"This laboratory is unavailable.\nReason: {lab_block}")
+                return
+
+            selected = interval_list.curselection()
+            if not selected:
+                messagebox.showerror("No Interval", "Select at least one interval.")
+                return
+
+            created = []
+            skipped = []
+            for index in selected:
+                interval = self.system.LAB_INTERVALS[index]
+                duplicate = any(
+                    reservation["username"] == self.username
+                    and reservation["type"] == "Laboratory"
+                    and reservation["resource"] == lab["name"]
+                    and reservation["date"] == reservation_date
+                    and reservation["time"] == interval
+                    for reservation in self.system.reservations
+                )
+                if duplicate:
+                    skipped.append(f"{interval} (already reserved)")
+                    continue
+
+                booked = sum(
+                    1 for reservation in self.system.reservations
+                    if reservation["type"] == "Laboratory"
+                    and reservation["resource"] == lab["name"]
+                    and reservation["date"] == reservation_date
+                    and reservation["time"] == interval
+                )
+                if booked >= lab["capacity"]:
+                    skipped.append(f"{interval} (full)")
+                    continue
+
+                reservation_id = f"RES-{self.system.next_reservation_id:04d}"
+                self.system.next_reservation_id += 1
+                self.system.reservations.append({
+                    "id": reservation_id,
+                    "username": self.username,
+                    "type": "Laboratory",
+                    "resource": lab["name"],
+                    "date": reservation_date,
+                    "time": interval,
+                    "quantity": 1,
+                    "status": "Requested",
+                })
+                created.append(reservation_id)
+                self.system.add_log(
+                    self.username,
+                    f"Requested laboratory reservation {reservation_id}",
+                )
+
+            message = ""
+            if created:
+                message += "Created: " + ", ".join(created)
+            if skipped:
+                message += ("\nSkipped: " if message else "") + ", ".join(skipped)
+            messagebox.showinfo("Laboratory Reservations", message or "No reservation created.")
+
+        ttk.Button(window, text="Reserve Selected Intervals",
+                   command=reserve).pack(pady=12)
+
+    def gui_cancel_reservation(self):
+        rows = [row for row in self.system.reservations
+                if row["username"] == self.username]
+        if not rows:
+            messagebox.showinfo("Reservations", "You have no reservations.")
+            return
+
+        window = tk.Toplevel(self.root)
+        window.title("Cancel Reservation")
+        window.geometry("650x340")
+
+        tree = ttk.Treeview(window, columns=("ID", "Type", "Resource",
+                                             "Date", "Time", "Status"),
+                            show="headings")
+        for column in ("ID", "Type", "Resource", "Date", "Time", "Status"):
+            tree.heading(column, text=column)
+            tree.column(column, width=100)
+        tree.pack(fill="both", expand=True, padx=10, pady=10)
+        for row in rows:
+            tree.insert("", "end", values=(row["id"], row["type"], row["resource"],
+                                           row["date"], row["time"], row["status"]))
+
+        def cancel():
+            selected = tree.selection()
+            if not selected:
+                messagebox.showerror("Cancel Reservation", "Select a reservation.")
+                return
+            reservation_id = tree.item(selected[0], "values")[0]
+            reservation = next((row for row in rows if row["id"] == reservation_id), None)
+            if reservation is None:
+                return
+            if reservation["type"] == "Equipment":
+                item = next((item for item in self.system.equipment
+                             if item["name"] == reservation["resource"]), None)
+                if item:
+                    item["available"] += reservation["quantity"]
+            self.system.reservations.remove(reservation)
+            self.system.add_log(self.username,
+                                f"Cancelled reservation {reservation_id}")
+            tree.delete(selected[0])
+            messagebox.showinfo("Cancelled", "Reservation cancelled.")
+
+        ttk.Button(window, text="Cancel Selected Reservation", command=cancel).pack(pady=5)
+
+    def gui_equipment_reservation(self):
+        window = tk.Toplevel(self.root)
+        window.title("Equipment Reservation")
+        window.geometry("420x300")
+
+        tk.Label(window, text="Equipment").pack(anchor="w", padx=30, pady=(15, 3))
+        equipment_names = [item["name"] for item in self.system.equipment
+                           if item["available"] > 0]
+        equipment = ttk.Combobox(window, values=equipment_names,
+                                 state="readonly", width=38)
+        equipment.set(equipment_names[0] if equipment_names else "")
+        equipment.pack(anchor="w", padx=30)
+
+        tk.Label(window, text="Quantity").pack(anchor="w", padx=30, pady=(10, 3))
+        quantity = ttk.Entry(window, width=15)
+        quantity.pack(anchor="w", padx=30)
+
+        tk.Label(window, text="Use Date").pack(anchor="w", padx=30, pady=(10, 3))
+        use_date = ttk.Entry(window, width=15)
+        use_date.insert(0, date.today().isoformat())
+        use_date.pack(anchor="w", padx=30)
+
+        def reserve():
+            item = next((item for item in self.system.equipment
+                         if item["name"] == equipment.get()), None)
+            if item is None:
+                messagebox.showerror("Equipment", "Select equipment.")
+                return
+            if not quantity.get().isdigit():
+                messagebox.showerror("Quantity", "Quantity must be a number.")
+                return
+            amount = int(quantity.get())
+            if amount < 1 or amount > item["available"]:
+                messagebox.showerror("Quantity",
+                                     f"Available quantity: {item['available']}")
+                return
+            try:
+                date.fromisoformat(use_date.get().strip())
+            except ValueError:
+                messagebox.showerror("Invalid Date", "Use YYYY-MM-DD.")
+                return
+
+            reservation_id = f"RES-{self.system.next_reservation_id:04d}"
+            self.system.next_reservation_id += 1
+            self.system.reservations.append({
+                "id": reservation_id,
+                "username": self.username,
+                "type": "Equipment",
+                "resource": item["name"],
+                "date": use_date.get().strip(),
+                "time": "Not specified",
+                "quantity": amount,
+                "status": "Requested",
+            })
+            item["available"] -= amount
+            self.system.add_log(
+                self.username,
+                f"Requested equipment reservation {reservation_id}",
+            )
+            messagebox.showinfo("Equipment Reservation",
+                                f"Requested successfully ({reservation_id}).")
+
+        ttk.Button(window, text="Request Equipment", command=reserve).pack(pady=15)
+
+    def create_table_window(self, title, columns, rows):
+        window = tk.Toplevel(self.root)
+        window.title(title)
+        window.geometry("780x430")
+
+        search_frame = tk.Frame(window)
+        search_frame.pack(fill="x", padx=10, pady=8)
+        tk.Label(search_frame, text="Search").pack(side="left")
+        search_entry = ttk.Entry(search_frame, width=30)
+        search_entry.pack(side="left", padx=5)
+
+        tree = ttk.Treeview(window, columns=tuple(columns), show="headings")
+        for column in columns:
+            tree.heading(column, text=column)
+            tree.column(column, width=max(95, 700 // len(columns)), anchor="w")
+        tree.pack(fill="both", expand=True, padx=10, pady=(0, 10))
+
+        def populate():
+            keyword = search_entry.get().strip().lower()
+            for item in tree.get_children():
+                tree.delete(item)
+            for row in rows:
+                if not keyword or any(keyword in str(value).lower()
+                                      for value in row):
+                    tree.insert("", "end", values=row)
+
+        search_entry.bind("<KeyRelease>", lambda event: populate())
+        populate()
+        return window
+
+    def gui_reservations(self):
+        rows = [
+            (row["id"], row["username"], row["type"], row["resource"],
+             row["date"], row["time"], row["quantity"], row["status"])
+            for row in self.system.reservations
+            if self.role == "admin" or row["username"] == self.username
+        ]
+        self.create_table_window(
+            "Current Reservations",
+            ("ID", "Username", "Type", "Resource", "Date", "Time",
+             "Quantity", "Status"),
+            rows,
+        )
+
+    def gui_accountability(self):
+        window = tk.Toplevel(self.root)
+        window.title("Accountability Form")
+        window.geometry("420x390")
+
+        fields = {}
+        for label in ("Borrower Name", "Resource", "Quantity",
+                      "Condition", "Remarks"):
+            tk.Label(window, text=label).pack(anchor="w", padx=30,
+                                               pady=(10, 2))
+            entry = ttk.Entry(window, width=38)
+            entry.pack(anchor="w", padx=30)
+            fields[label] = entry
+
+        def submit():
+            quantity = fields["Quantity"].get().strip()
+            if not quantity.isdigit():
+                messagebox.showerror("Invalid Quantity", "Quantity must be a number.")
+                return
+            if not fields["Borrower Name"].get().strip():
+                messagebox.showerror("Invalid Form", "Borrower name is required.")
+                return
+
+            self.system.accountability.append({
+                "username": self.username,
+                "name": fields["Borrower Name"].get().strip(),
+                "resource": fields["Resource"].get().strip(),
+                "quantity": int(quantity),
+                "condition": fields["Condition"].get().strip(),
+                "remarks": fields["Remarks"].get().strip(),
+            })
+            self.system.add_log(
+                self.username,
+                f"Submitted accountability for {fields['Resource'].get().strip()}",
+            )
+            messagebox.showinfo("Accountability", "Accountability form submitted.")
+
+        ttk.Button(window, text="Submit Form", command=submit).pack(pady=15)
+
+    def gui_resources(self):
+        rows = [
+            (item["id"], "Equipment", item["name"], item["available"])
+            for item in self.system.equipment
+        ] + [
+            (lab["id"], "Laboratory", lab["name"],
+             lab["capacity"] - lab["booked"])
+            for lab in self.system.laboratories
+        ]
+        self.create_table_window(
+            "Available Resources",
+            ("ID", "Type", "Name", "Available"),
+            rows,
+        )
+
+    def gui_logbook(self):
+        rows = [
+            (entry["date"], entry["time"], entry["username"], entry["action"])
+            for entry in self.system.logbook
+            if self.role == "admin" or entry["username"] == self.username
+        ]
+        self.create_table_window(
+            "Logbook",
+            ("Date", "Time", "Username", "Action"),
+            rows,
+        )
+
+    def show_admin_dashboard(self):
+        self.clear_window()
+        name = self.system.admins[self.username]["name"]
+        self.make_header(f"Administrator Dashboard - {name}")
+
+        buttons = tk.Frame(self.root, padx=25, pady=15)
+        buttons.pack(expand=True)
+
+        actions = (
+            ("Set Laboratory Reservations", self.gui_admin_laboratories),
+            ("Set Equipment Reservations", self.gui_admin_equipment),
+            ("View Current Reservations", self.gui_reservations),
+            ("Resource Management", self.gui_admin_resources),
+            ("View Logbook", self.gui_logbook),
+            ("Add Administrator", self.gui_add_administrator),
+        )
+        for text, command in actions:
+            ttk.Button(buttons, text=text, width=38, command=command).pack(pady=5)
+
+    def gui_admin_laboratories(self):
+        window = tk.Toplevel(self.root)
+        window.title("Laboratory Reservations")
+        window.geometry("620x430")
+
+        tk.Label(window, text="Add Laboratory Schedule",
+                 font=("Arial", 14, "bold")).pack(pady=10)
+        add_frame = tk.Frame(window)
+        add_frame.pack(padx=20)
+
+        tk.Label(add_frame, text="ID").grid(row=0, column=0, sticky="w")
+        lab_id = ttk.Entry(add_frame, width=12)
+        lab_id.grid(row=1, column=0, padx=(0, 8))
+
+        tk.Label(add_frame, text="Name").grid(row=0, column=1, sticky="w")
+        lab_name = ttk.Entry(add_frame, width=24)
+        lab_name.grid(row=1, column=1, padx=(0, 8))
+
+        tk.Label(add_frame, text="Capacity").grid(row=0, column=2, sticky="w")
+        capacity = ttk.Entry(add_frame, width=10)
+        capacity.grid(row=1, column=2)
+
+        def add_lab():
+            if not lab_id.get().strip() or not lab_name.get().strip():
+                messagebox.showerror("Laboratory", "ID and name are required.")
+                return
+            if not capacity.get().isdigit():
+                messagebox.showerror("Laboratory", "Capacity must be a number.")
+                return
+            lab_id_value = lab_id.get().strip().upper()
+            if any(lab["id"] == lab_id_value for lab in self.system.laboratories):
+                messagebox.showerror("Laboratory", "Laboratory ID already exists.")
+                return
+            self.system.laboratories.append({
+                "id": lab_id_value,
+                "name": lab_name.get().strip(),
+                "date": "Every day",
+                "time": "All fixed intervals",
+                "capacity": int(capacity.get()),
+                "booked": 0,
+            })
+            messagebox.showinfo("Laboratory", "Laboratory schedule added.")
+
+        ttk.Button(window, text="Add Laboratory", command=add_lab).pack(pady=10)
+
+        tk.Label(window, text="Block a Date",
+                 font=("Arial", 14, "bold")).pack(pady=(12, 5))
+        block_frame = tk.Frame(window)
+        block_frame.pack(padx=20)
+
+        tk.Label(block_frame, text="Date").grid(row=0, column=0, sticky="w")
+        blocked_date = ttk.Entry(block_frame, width=15)
+        blocked_date.grid(row=1, column=0, padx=(0, 8))
+
+        tk.Label(block_frame, text="Scope").grid(row=0, column=1, sticky="w")
+        lab_scopes = ["All laboratories"] + [
+            lab["name"] for lab in self.system.laboratories
+        ]
+        scope = ttk.Combobox(block_frame, values=lab_scopes,
+                             state="readonly", width=28)
+        scope.set("All laboratories")
+        scope.grid(row=1, column=1, padx=(0, 8))
+
+        tk.Label(block_frame, text="Reason").grid(row=0, column=2, sticky="w")
+        reason = ttk.Entry(block_frame, width=32)
+        reason.grid(row=1, column=2)
+
+        def block():
+            blocked = blocked_date.get().strip()
+            try:
+                date.fromisoformat(blocked)
+            except ValueError:
+                messagebox.showerror("Invalid Date", "Use YYYY-MM-DD.")
+                return
+            if not reason.get().strip():
+                messagebox.showerror("Reason Required",
+                                     "Enter why laboratories cannot be conducted.")
+                return
+            scope_key = "__ALL__" if scope.get() == "All laboratories" else scope.get()
+            self.system.blocked_laboratory_dates[(scope_key, blocked)] = reason.get().strip()
+            messagebox.showinfo("Date Blocked",
+                                f"Blocked {scope.get()} on {blocked}.")
+
+        ttk.Button(window, text="Block Date", command=block).pack(pady=10)
+
+        tk.Label(window, text="Blocked Dates",
+                 font=("Arial", 14, "bold")).pack(pady=(5, 5))
+        blocked = tk.Text(window, height=5, width=68)
+        blocked.pack()
+        if self.system.blocked_laboratory_dates:
+            for (scope_key, blocked_date_value), reason_text in sorted(
+                    self.system.blocked_laboratory_dates.items()):
+                scope_name = "All laboratories" if scope_key == "__ALL__" else scope_key
+                blocked.insert("end",
+                               f"{blocked_date_value} | {scope_name} | {reason_text}\n")
+        else:
+            blocked.insert("end", "No blocked laboratory dates.")
+        blocked.config(state="disabled")
+
+    def gui_admin_equipment(self):
+        window = tk.Toplevel(self.root)
+        window.title("Equipment Management")
+        window.geometry("500x330")
+
+        tk.Label(window, text="Add Equipment",
+                 font=("Arial", 14, "bold")).pack(pady=12)
+        add_frame = tk.Frame(window)
+        add_frame.pack(padx=20)
+
+        labels = ("ID", "Name", "Category", "Quantity")
+        entries = {}
+        for index, label in enumerate(labels):
+            tk.Label(add_frame, text=label).grid(row=0, column=index, sticky="w")
+            entry = ttk.Entry(add_frame, width=14)
+            entry.grid(row=1, column=index, padx=4)
+            entries[label] = entry
+
+        def add():
+            quantity = entries["Quantity"].get().strip()
+            if not entries["ID"].get().strip() or not entries["Name"].get().strip():
+                messagebox.showerror("Equipment", "ID and name are required.")
+                return
+            if not quantity.isdigit():
+                messagebox.showerror("Equipment", "Quantity must be a number.")
+                return
+            item_id = entries["ID"].get().strip().upper()
+            if any(item["id"] == item_id for item in self.system.equipment):
+                messagebox.showerror("Equipment", "Equipment ID already exists.")
+                return
+            amount = int(quantity)
+            self.system.equipment.append({
+                "id": item_id,
+                "name": entries["Name"].get().strip(),
+                "category": entries["Category"].get().strip(),
+                "available": amount,
+                "total": amount,
+            })
+            messagebox.showinfo("Equipment", "Equipment added.")
+
+        ttk.Button(window, text="Add Equipment", command=add).pack(pady=12)
+
+        tk.Label(window, text="Update Availability",
+                 font=("Arial", 14, "bold")).pack(pady=(10, 5))
+        equipment_names = [item["name"] for item in self.system.equipment]
+        equipment = ttk.Combobox(window, values=equipment_names,
+                                 state="readonly", width=35)
+        equipment.set(equipment_names[0] if equipment_names else "")
+        equipment.pack(pady=5)
+        quantity = ttk.Entry(window, width=12)
+        quantity.pack(pady=5)
+
+        def update():
+            item = next((item for item in self.system.equipment
+                         if item["name"] == equipment.get()), None)
+            if item is None:
+                messagebox.showerror("Equipment", "Select equipment.")
+                return
+            if not quantity.get().isdigit():
+                messagebox.showerror("Quantity", "Quantity must be a number.")
+                return
+            amount = int(quantity.get())
+            if amount > item["total"]:
+                messagebox.showerror("Quantity",
+                                     f"Maximum quantity is {item['total']}.")
+                return
+            item["available"] = amount
+            messagebox.showinfo("Equipment", "Availability updated.")
+
+        ttk.Button(window, text="Update Available Quantity",
+                   command=update).pack(pady=8)
+
+    def gui_admin_resources(self):
+        rows = [
+            (item["id"], "Equipment", item["name"], item["category"],
+             item["available"], item["total"])
+            for item in self.system.equipment
+        ] + [
+            (lab["id"], "Laboratory", lab["name"], "General",
+             lab["capacity"] - lab["booked"], lab["capacity"])
+            for lab in self.system.laboratories
+        ]
+        self.create_table_window(
+            "Resource Management",
+            ("ID", "Type", "Name", "Category", "Available", "Total"),
+            rows,
+        )
+
+    def gui_add_administrator(self):
+        window = tk.Toplevel(self.root)
+        window.title("Add Administrator")
+        window.geometry("380x300")
+
+        fields = {}
+        for label, hidden in (
+            ("Name", False),
+            ("Username", False),
+            ("Password", True),
+        ):
+            tk.Label(window, text=label).pack(anchor="w", padx=40,
+                                               pady=(12, 2))
+            entry = ttk.Entry(window, width=32, show="*" if hidden else "")
+            entry.pack(anchor="w", padx=40)
+            fields[label] = entry
+
+        def add():
+            name = fields["Name"].get().strip()
+            username = fields["Username"].get().strip().lower()
+            password = fields["Password"].get()
+            if not name or not username or not password:
+                messagebox.showerror("Administrator",
+                                     "Name, username, and password are required.")
+                return
+            if username in self.system.admins:
+                messagebox.showerror("Administrator",
+                                     "Administrator username already exists.")
+                return
+            self.system.admins[username] = {"password": password, "name": name}
+            messagebox.showinfo("Administrator",
+                                f"Administrator '{username}' added.")
+
+        ttk.Button(window, text="Add Administrator", command=add).pack(pady=15)
 if __name__ == "__main__":
-    LABlySystem().run()
+    lably_system = LABlySystem()
+    root = tk.Tk()
+    LABlyGUI(root, lably_system)
+    root.mainloop()
