@@ -78,7 +78,10 @@ class LABlySystem:
 
             while position >= 0:
                 previous_key = key(sorted_rows[position])
-                should_move = previous_key < current_key if reverse else previous_key > current_key
+                if reverse:
+                    should_move = previous_key < current_key
+                else:
+                    should_move = previous_key > current_key
                 if not should_move:
                     break
                 sorted_rows[position + 1] = sorted_rows[position]
@@ -1118,18 +1121,67 @@ class LABlyGUI:
 
         window = tk.Toplevel(self.root)
         window.title("Cancel Reservation")
-        window.geometry("650x340")
+        window.geometry("780x400")
 
-        tree = ttk.Treeview(window, columns=("ID", "Type", "Resource",
-                                             "Date", "Time", "Status"),
+        columns = ("ID", "Type", "Resource", "Date", "Time", "Status")
+        controls = tk.Frame(window)
+        controls.pack(fill="x", padx=10, pady=8)
+        tk.Label(controls, text="Search").pack(side="left")
+        search_entry = ttk.Entry(controls, width=20)
+        search_entry.pack(side="left", padx=5)
+        tk.Label(controls, text="Sort column").pack(side="left", padx=(8, 0))
+        sort_column = ttk.Combobox(controls, values=columns,
+                                   state="readonly", width=12)
+        sort_column.set(columns[0])
+        sort_column.pack(side="left", padx=5)
+        sort_order = ttk.Combobox(controls, values=("Ascending", "Descending"),
+                                  state="readonly", width=12)
+        sort_order.set("Ascending")
+        sort_order.pack(side="left", padx=5)
+
+        tree = ttk.Treeview(window, columns=columns,
                             show="headings")
-        for column in ("ID", "Type", "Resource", "Date", "Time", "Status"):
+        for column in columns:
             tree.heading(column, text=column)
             tree.column(column, width=100)
-        tree.pack(fill="both", expand=True, padx=10, pady=10)
-        for row in rows:
-            tree.insert("", "end", values=(row["id"], row["type"], row["resource"],
-                                           row["date"], row["time"], row["status"]))
+        tree.pack(fill="both", expand=True, padx=10, pady=(0, 10))
+
+        def populate():
+            keyword = search_entry.get().strip().lower()
+            visible_rows = [
+                row for row in rows
+                if not keyword or any(
+                    keyword in str(row[key]).lower()
+                    for key in ("id", "type", "resource", "date", "time", "status")
+                )
+            ]
+            column_index = columns.index(sort_column.get())
+
+            def value_key(row):
+                value = (
+                    row["id"], row["type"], row["resource"],
+                    row["date"], row["time"], row["status"],
+                )[column_index]
+                return str(value).casefold()
+
+            visible_rows = LABlySystem.insertion_sort(
+                visible_rows,
+                key=value_key,
+                reverse=sort_order.get() == "Descending",
+            )
+            for item in tree.get_children():
+                tree.delete(item)
+            for row in visible_rows:
+                tree.insert("", "end", values=(
+                    row["id"], row["type"], row["resource"],
+                    row["date"], row["time"], row["status"],
+                ))
+
+        search_entry.bind("<KeyRelease>", lambda event: populate())
+        sort_column.bind("<<ComboboxSelected>>", lambda event: populate())
+        sort_order.bind("<<ComboboxSelected>>", lambda event: populate())
+        ttk.Button(controls, text="Sort", command=populate).pack(side="left", padx=5)
+        populate()
 
         def cancel():
             selected = tree.selection()
@@ -1146,9 +1198,10 @@ class LABlyGUI:
                 if item:
                     item["available"] += reservation["quantity"]
             self.system.reservations.remove(reservation)
+            rows.remove(reservation)
             self.system.add_log(self.username,
                                 f"Cancelled reservation {reservation_id}")
-            tree.delete(selected[0])
+            populate()
             messagebox.showinfo("Cancelled", "Reservation cancelled.")
 
         ttk.Button(window, text="Cancel Selected Reservation", command=cancel).pack(pady=5)
@@ -1222,11 +1275,31 @@ class LABlyGUI:
         window.title(title)
         window.geometry("780x430")
 
-        search_frame = tk.Frame(window)
-        search_frame.pack(fill="x", padx=10, pady=8)
-        tk.Label(search_frame, text="Search").pack(side="left")
-        search_entry = ttk.Entry(search_frame, width=30)
-        search_entry.pack(side="left", padx=5)
+        controls = tk.Frame(window)
+        controls.pack(fill="x", padx=10, pady=8)
+        tk.Label(controls, text="Search").pack(side="left")
+        search_entry = ttk.Entry(controls, width=22)
+        search_entry.pack(side="left", padx=(5, 12))
+
+        tk.Label(controls, text="Sort column").pack(side="left")
+        sort_column = ttk.Combobox(
+            controls,
+            values=columns,
+            state="readonly",
+            width=16,
+        )
+        sort_column.set(columns[0])
+        sort_column.pack(side="left", padx=5)
+
+        tk.Label(controls, text="Order").pack(side="left", padx=(8, 0))
+        sort_order = ttk.Combobox(
+            controls,
+            values=("Ascending", "Descending"),
+            state="readonly",
+            width=12,
+        )
+        sort_order.set("Ascending")
+        sort_order.pack(side="left", padx=5)
 
         tree = ttk.Treeview(window, columns=tuple(columns), show="headings")
         for column in columns:
@@ -1236,14 +1309,34 @@ class LABlyGUI:
 
         def populate():
             keyword = search_entry.get().strip().lower()
+            visible_rows = [
+                row for row in rows
+                if not keyword or any(keyword in str(value).lower() for value in row)
+            ]
+            if sort_column.get() in columns:
+                column_index = columns.index(sort_column.get())
+
+                def value_key(row):
+                    value = row[column_index]
+                    if isinstance(value, (int, float)):
+                        return 0, value
+                    return 1, str(value).casefold()
+
+                visible_rows = LABlySystem.insertion_sort(
+                    visible_rows,
+                    key=value_key,
+                    reverse=sort_order.get() == "Descending",
+                )
+
             for item in tree.get_children():
                 tree.delete(item)
-            for row in rows:
-                if not keyword or any(keyword in str(value).lower()
-                                      for value in row):
-                    tree.insert("", "end", values=row)
+            for row in visible_rows:
+                tree.insert("", "end", values=row)
 
         search_entry.bind("<KeyRelease>", lambda event: populate())
+        sort_column.bind("<<ComboboxSelected>>", lambda event: populate())
+        sort_order.bind("<<ComboboxSelected>>", lambda event: populate())
+        ttk.Button(controls, text="Sort", command=populate).pack(side="left", padx=5)
         populate()
         return window
 
