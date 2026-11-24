@@ -36,6 +36,7 @@ class LABlySystem:
              "time": "All fixed intervals", "capacity": 6, "booked": 0},
         ]
         self.blocked_laboratory_dates = {}
+        self.blocked_laboratory_sessions = {}
         self.equipment = [
             {"id": "EQ-001", "name": "Microscope", "category": "Science",
              "available": 10, "total": 10},
@@ -172,6 +173,22 @@ class LABlySystem:
         self.logbook.append({"username": username, "action": action,
                              "date": "2026-11-24", "time": "09:00"})
 
+    def laboratory_block_reason(self, lab_name, reservation_date, interval=None):
+        reason = self.blocked_laboratory_dates.get(("__ALL__", reservation_date))
+        if reason:
+            return reason
+        reason = self.blocked_laboratory_dates.get((lab_name, reservation_date))
+        if reason or interval is None:
+            return reason
+        reason = self.blocked_laboratory_sessions.get(
+            ("__ALL__", reservation_date, interval)
+        )
+        if reason:
+            return reason
+        return self.blocked_laboratory_sessions.get(
+            (lab_name, reservation_date, interval)
+        )
+
     def request_laboratory(self, username):
         print("\n--- Available Laboratory Reservations ---")
         if not self.laboratories:
@@ -185,8 +202,7 @@ class LABlySystem:
             print("Invalid date. Use YYYY-MM-DD.")
             return
 
-        lab_date = reservation_date
-        all_date_block = self.blocked_laboratory_dates.get(("__ALL__", lab_date))
+        all_date_block = self.blocked_laboratory_dates.get(("__ALL__", reservation_date))
         if all_date_block:
             print(f"This date is not available for laboratory conduct. Reason: {all_date_block}")
             return
@@ -201,7 +217,9 @@ class LABlySystem:
             return
         lab = self.laboratories[int(lab_choice) - 1]
 
-        lab_date_block = self.blocked_laboratory_dates.get((lab["name"], reservation_date))
+        lab_date_block = self.blocked_laboratory_dates.get(
+            (lab["name"], reservation_date)
+        )
         if lab_date_block:
             print(f"{lab['name']} is unavailable on this date. Reason: {lab_date_block}")
             return
@@ -230,6 +248,13 @@ class LABlySystem:
         created = []
         skipped = []
         for selected_time in selected_intervals:
+            block_reason = self.laboratory_block_reason(
+                lab["name"], reservation_date, selected_time
+            )
+            if block_reason:
+                skipped.append(f"{selected_time} (blocked: {block_reason})")
+                continue
+
             duplicate = any(
                 reservation["username"] == username
                 and reservation["type"] == "Laboratory"
@@ -424,9 +449,9 @@ class LABlySystem:
         print("1. Add laboratory schedule")
         print("2. Remove laboratory schedule")
         print("3. Edit laboratory capacity")
-        print("4. Block a date")
-        print("5. Unblock a date")
-        print("6. View blocked dates")
+        print("4. Block a date or session")
+        print("5. Unblock a date or session")
+        print("6. View blocked dates and sessions")
         choice = self.read_choice("Select action: ")
 
         if choice == "1":
@@ -473,6 +498,13 @@ class LABlySystem:
                 print("Invalid date. Use YYYY-MM-DD.")
                 return
 
+            print("1. Entire day")
+            print("2. Specific session")
+            block_type = self.read_choice("Select block type: ")
+            if block_type not in ("1", "2"):
+                print("Invalid block type.")
+                return
+
             print("1. All laboratories")
             for index, lab in enumerate(self.laboratories, 1):
                 print(f"{index + 1}. {lab['name']}")
@@ -489,12 +521,32 @@ class LABlySystem:
                 print("Invalid scope.")
                 return
 
+            interval = None
+            if block_type == "2":
+                for index, session in enumerate(self.LAB_INTERVALS, 1):
+                    print(f"{index}. {session}")
+                session_choice = self.read_choice("Select session: ")
+                if not session_choice.isdigit() or not (
+                    1 <= int(session_choice) <= len(self.LAB_INTERVALS)
+                ):
+                    print("Invalid session.")
+                    return
+                interval = self.LAB_INTERVALS[int(session_choice) - 1]
+
             reason = self.read_choice("Reason laboratory cannot be conducted: ").strip()
             if not reason:
                 print("Reason cannot be empty.")
                 return
-            self.blocked_laboratory_dates[(scope, blocked_date)] = reason
-            print(f"Blocked {scope_name} on {blocked_date}. Reason: {reason}")
+            if interval is None:
+                self.blocked_laboratory_dates[(scope, blocked_date)] = reason
+                print(f"Blocked {scope_name} for the entire day on {blocked_date}. "
+                      f"Reason: {reason}")
+            else:
+                self.blocked_laboratory_sessions[
+                    (scope, blocked_date, interval)
+                ] = reason
+                print(f"Blocked {scope_name} session {interval} on {blocked_date}. "
+                      f"Reason: {reason}")
         elif choice == "5":
             blocked_date = self.read_choice("Date to unblock (YYYY-MM-DD): ").strip()
             try:
@@ -503,6 +555,13 @@ class LABlySystem:
                 print("Invalid date. Use YYYY-MM-DD.")
                 return
 
+            print("1. Entire day")
+            print("2. Specific session")
+            block_type = self.read_choice("Select block type: ")
+            if block_type not in ("1", "2"):
+                print("Invalid block type.")
+                return
+
             print("1. All laboratories")
             for index, lab in enumerate(self.laboratories, 1):
                 print(f"{index + 1}. {lab['name']}")
@@ -519,24 +578,50 @@ class LABlySystem:
                 print("Invalid scope.")
                 return
 
-            key = (scope, blocked_date)
-            if key not in self.blocked_laboratory_dates:
-                print("No matching blocked date found.")
+            if block_type == "1":
+                key = (scope, blocked_date)
+                blocks = self.blocked_laboratory_dates
+                description = f"{scope_name} for the entire day"
+            else:
+                for index, session in enumerate(self.LAB_INTERVALS, 1):
+                    print(f"{index}. {session}")
+                session_choice = self.read_choice("Select session: ")
+                if not session_choice.isdigit() or not (
+                    1 <= int(session_choice) <= len(self.LAB_INTERVALS)
+                ):
+                    print("Invalid session.")
+                    return
+                interval = self.LAB_INTERVALS[int(session_choice) - 1]
+                key = (scope, blocked_date, interval)
+                blocks = self.blocked_laboratory_sessions
+                description = f"{scope_name} session {interval}"
+
+            if key not in blocks:
+                print("No matching block found.")
                 return
-            del self.blocked_laboratory_dates[key]
-            print(f"Unblocked {scope_name} on {blocked_date}.")
+            del blocks[key]
+            print(f"Unblocked {description} on {blocked_date}.")
         elif choice == "6":
-            print("\n--- Blocked Laboratory Dates ---")
-            if not self.blocked_laboratory_dates:
-                print("No blocked laboratory dates.")
+            print("\n--- Blocked Laboratory Dates and Sessions ---")
+            if not self.blocked_laboratory_dates and not self.blocked_laboratory_sessions:
+                print("No blocked laboratory dates or sessions.")
                 return
+            blocked_items = [
+                (key, reason, "Entire day")
+                for key, reason in self.blocked_laboratory_dates.items()
+            ] + [
+                ((scope, blocked_date), reason, interval)
+                for (scope, blocked_date, interval), reason
+                in self.blocked_laboratory_sessions.items()
+            ]
             blocked_items = LABlySystem.insertion_sort(
-                list(self.blocked_laboratory_dates.items()),
-                key=lambda item: str(item[0]).lower(),
+                blocked_items,
+                key=lambda item: str(item[0]).lower() + str(item[2]).lower(),
             )
-            for (scope, blocked_date), reason in blocked_items:
+            for (scope, blocked_date), reason, block_period in blocked_items:
                 scope_name = "All laboratories" if scope == "__ALL__" else scope
-                print(f"{blocked_date} | {scope_name} | Reason: {reason}")
+                print(f"{blocked_date} | {scope_name} | {block_period} | "
+                      f"Reason: {reason}")
         else:
             print("Invalid action.")
 
@@ -931,6 +1016,13 @@ class LABlyGUI:
             skipped = []
             for index in selected:
                 interval = self.system.LAB_INTERVALS[index]
+                block_reason = self.system.laboratory_block_reason(
+                    lab["name"], reservation_date, interval
+                )
+                if block_reason:
+                    skipped.append(f"{interval} (blocked: {block_reason})")
+                    continue
+
                 duplicate = any(
                     reservation["username"] == self.username
                     and reservation["type"] == "Laboratory"
@@ -1222,7 +1314,7 @@ class LABlyGUI:
     def gui_admin_laboratories(self):
         window = tk.Toplevel(self.root)
         window.title("Laboratory Reservations")
-        window.geometry("620x430")
+        window.geometry("700x560")
 
         tk.Label(window, text="Add Laboratory Schedule",
                  font=("Arial", 14, "bold")).pack(pady=10)
@@ -1264,7 +1356,7 @@ class LABlyGUI:
 
         ttk.Button(window, text="Add Laboratory", command=add_lab).pack(pady=10)
 
-        tk.Label(window, text="Block a Date",
+        tk.Label(window, text="Block an Entire Day or Specific Session",
                  font=("Arial", 14, "bold")).pack(pady=(12, 5))
         block_frame = tk.Frame(window)
         block_frame.pack(padx=20)
@@ -1273,18 +1365,39 @@ class LABlyGUI:
         blocked_date = ttk.Entry(block_frame, width=15)
         blocked_date.grid(row=1, column=0, padx=(0, 8))
 
-        tk.Label(block_frame, text="Scope").grid(row=0, column=1, sticky="w")
+        tk.Label(block_frame, text="Block").grid(row=0, column=1, sticky="w")
+        block_type = ttk.Combobox(
+            block_frame,
+            values=["Entire day", "Specific session"],
+            state="readonly",
+            width=18,
+        )
+        block_type.set("Entire day")
+        block_type.grid(row=1, column=1, padx=(0, 8))
+
+        tk.Label(block_frame, text="Scope").grid(row=0, column=2, sticky="w")
         lab_scopes = ["All laboratories"] + [
             lab["name"] for lab in self.system.laboratories
         ]
         scope = ttk.Combobox(block_frame, values=lab_scopes,
-                             state="readonly", width=28)
+                             state="readonly", width=24)
         scope.set("All laboratories")
-        scope.grid(row=1, column=1, padx=(0, 8))
+        scope.grid(row=1, column=2, padx=(0, 8))
 
-        tk.Label(block_frame, text="Reason").grid(row=0, column=2, sticky="w")
-        reason = ttk.Entry(block_frame, width=32)
-        reason.grid(row=1, column=2)
+        tk.Label(block_frame, text="Session").grid(row=0, column=3, sticky="w")
+        session = ttk.Combobox(
+            block_frame,
+            values=self.system.LAB_INTERVALS,
+            state="readonly",
+            width=20,
+        )
+        session.grid(row=1, column=3)
+
+        reason_frame = tk.Frame(window)
+        reason_frame.pack(fill="x", padx=20, pady=(8, 0))
+        tk.Label(reason_frame, text="Reason").pack(side="left")
+        reason = ttk.Entry(reason_frame)
+        reason.pack(side="left", fill="x", expand=True, padx=8)
 
         def block():
             blocked = blocked_date.get().strip()
@@ -1298,27 +1411,50 @@ class LABlyGUI:
                                      "Enter why laboratories cannot be conducted.")
                 return
             scope_key = "__ALL__" if scope.get() == "All laboratories" else scope.get()
-            self.system.blocked_laboratory_dates[(scope_key, blocked)] = reason.get().strip()
-            messagebox.showinfo("Date Blocked",
-                                f"Blocked {scope.get()} on {blocked}.")
+            if block_type.get() == "Entire day":
+                self.system.blocked_laboratory_dates[(scope_key, blocked)] = reason.get().strip()
+                description = f"{scope.get()} for the entire day"
+            else:
+                if not session.get():
+                    messagebox.showerror("Session Required",
+                                         "Select the session to block.")
+                    return
+                self.system.blocked_laboratory_sessions[
+                    (scope_key, blocked, session.get())
+                ] = reason.get().strip()
+                description = f"{scope.get()} session {session.get()}"
+            messagebox.showinfo("Laboratory Blocked",
+                                f"Blocked {description} on {blocked}.")
 
-        ttk.Button(window, text="Block Date", command=block).pack(pady=10)
+        ttk.Button(window, text="Apply Block", command=block).pack(pady=10)
 
-        tk.Label(window, text="Blocked Dates",
+        tk.Label(window, text="Current Blocks",
                  font=("Arial", 14, "bold")).pack(pady=(5, 5))
-        blocked = tk.Text(window, height=5, width=68)
-        blocked.pack()
-        if self.system.blocked_laboratory_dates:
-            blocked_items = LABlySystem.insertion_sort(
-                list(self.system.blocked_laboratory_dates.items()),
-                key=lambda item: str(item[0]).lower(),
-            )
-            for (scope_key, blocked_date_value), reason_text in blocked_items:
+        blocked = tk.Text(window, height=9, width=78)
+        blocked.pack(fill="both", expand=True, padx=15, pady=(0, 10))
+        blocked_items = [
+            ((scope_key, blocked_date_value), reason_text, "Entire day")
+            for (scope_key, blocked_date_value), reason_text
+            in self.system.blocked_laboratory_dates.items()
+        ] + [
+            ((scope_key, blocked_date_value), reason_text, interval)
+            for (scope_key, blocked_date_value, interval), reason_text
+            in self.system.blocked_laboratory_sessions.items()
+        ]
+        blocked_items = LABlySystem.insertion_sort(
+            blocked_items,
+            key=lambda item: str(item[0]).lower() + str(item[2]).lower(),
+        )
+        if blocked_items:
+            for (scope_key, blocked_date_value), reason_text, period in blocked_items:
                 scope_name = "All laboratories" if scope_key == "__ALL__" else scope_key
-                blocked.insert("end",
-                               f"{blocked_date_value} | {scope_name} | {reason_text}\n")
+                blocked.insert(
+                    "end",
+                    f"{blocked_date_value} | {scope_name} | {period} | "
+                    f"Reason: {reason_text}\n",
+                )
         else:
-            blocked.insert("end", "No blocked laboratory dates.")
+            blocked.insert("end", "No blocked laboratory dates or sessions.")
         blocked.config(state="disabled")
 
     def gui_admin_equipment(self):
