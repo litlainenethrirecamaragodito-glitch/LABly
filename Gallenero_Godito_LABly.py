@@ -934,6 +934,9 @@ class LABlyGUI:
         self.role = None
         self.username = None
 
+        self.buttonstyle = ttk.Style()
+        self.buttonstyle.configure("TButton", font=("Century Gothic", 10))
+
         self.root.title("LABly - Laboratory Reservation System")
         self.root.geometry("760x520")
         self.root.minsize(700, 480)
@@ -953,20 +956,20 @@ class LABlyGUI:
 
         tk.Label(frame, text="LABly", font=("Arial", 24, "bold")).pack(pady=(0, 5))
         tk.Label(frame, text="Laboratory Reservation Management",
-                 font=("Arial", 11)).pack(pady=(0, 20))
+                 font=("Century Gothic", 11)).pack(pady=(0, 20))
 
-        tk.Label(frame, text="Role").pack(anchor="w")
+        tk.Label(frame, text="Role", font=("Century Gothic", 10)).pack(anchor="w")
         role = ttk.Combobox(frame, values=["User", "Administrator"],
-                            state="readonly", width=28)
+                            state="readonly", width=28, font=("Century Gothic", 9))
         role.set("User")
         role.pack(pady=(0, 10))
 
-        tk.Label(frame, text="Username").pack(anchor="w")
-        username = ttk.Entry(frame, width=30)
+        tk.Label(frame, text="Username", font=("Century Gothic", 10)).pack(anchor="w")
+        username = ttk.Entry(frame, width=30, font=("Century Gothic", 9))
         username.pack(pady=(0, 10))
 
-        tk.Label(frame, text="Password").pack(anchor="w")
-        password = ttk.Entry(frame, width=30, show="*")
+        tk.Label(frame, text="Password", font=("Century Gothic", 10)).pack(anchor="w")
+        password = ttk.Entry(frame, width=30, show="*", font=("Century Gothic", 10))
         password.pack(pady=(0, 15))
 
         def login():
@@ -998,7 +1001,7 @@ class LABlyGUI:
         window.geometry("380x330")
         window.resizable(False, False)
 
-        tk.Label(window, text="Create Account", font=("Arial", 16, "bold")).pack(pady=15)
+        tk.Label(window, text="Create Account", font=("Century Gothic", 16, "bold")).pack(pady=15)
 
         fields = {}
         for label, hidden in (
@@ -1007,8 +1010,8 @@ class LABlyGUI:
             ("Password", True),
             ("Confirm Password", True),
         ):
-            tk.Label(window, text=label).pack(anchor="w", padx=40)
-            entry = ttk.Entry(window, width=35, show="*" if hidden else "")
+            tk.Label(window, text=label, font=("Century Gothic", 10)).pack(anchor="w", padx=40)
+            entry = ttk.Entry(window, width=35, show="*" if hidden else "", font=("Century Gothic", 10))
             entry.pack(pady=(0, 8))
             fields[label] = entry
 
@@ -1042,7 +1045,7 @@ class LABlyGUI:
     def make_header(self, title):
         header = tk.Frame(self.root, padx=15, pady=10)
         header.pack(fill="x")
-        tk.Label(header, text=title, font=("Arial", 18, "bold")).pack(side="left")
+        tk.Label(header, text=title, font=("Century Gothic", 18, "bold")).pack(side="left")
         ttk.Button(header, text="Log Out", command=self.logout).pack(side="right")
 
     def logout(self):
@@ -1073,23 +1076,23 @@ class LABlyGUI:
         window.title("Laboratory Reservation")
         window.geometry("500x660")
 
-        tk.Label(window, text="Reservation Date").pack(anchor="w", padx=30, pady=(15, 3))
-        date_entry = ttk.Entry(window, width=25)
+        tk.Label(window, text="Reservation Date", font=("Century Gothic", 10)).pack(anchor="w", padx=30, pady=(15, 3))
+        date_entry = ttk.Entry(window, width=25,font=("Century Gothic", 10))
         date_entry.insert(0, date.today().isoformat())
         date_entry.pack(anchor="w", padx=30)
 
-        tk.Label(window, text="Laboratory").pack(anchor="w", padx=30, pady=(12, 3))
+        tk.Label(window, text="Laboratory", font=("Century Gothic", 10)).pack(anchor="w", padx=30, pady=(12, 3))
         laboratory_names = [lab["name"] for lab in self.system.laboratories]
         laboratory = ttk.Combobox(window, values=laboratory_names,
-                                  state="readonly", width=38)
+                                  state="readonly", width=38, font=("Century Gothic", 10))
         laboratory.set(laboratory_names[0] if laboratory_names else "")
         laboratory.pack(anchor="w", padx=30)
 
-        tk.Label(window, text="Intervals (use Ctrl to select multiple)").pack(
+        tk.Label(window, text="Intervals (use Ctrl to select multiple)", font=("Century Gothic", 10)).pack(
             anchor="w", padx=30, pady=(12, 3)
         )
         interval_list = tk.Listbox(window, selectmode="multiple", height=9,
-                                   exportselection=False)
+                                   exportselection=False, font=("Century Gothic", 10))
         for interval in self.system.LAB_INTERVALS:
             interval_list.insert("end", interval)
         interval_list.pack(anchor="w", padx=30)
@@ -1097,9 +1100,9 @@ class LABlyGUI:
         details = {}
         for label in ("Names of Researchers", "Research Title",
                       "Activity in the Laboratory", "Supervisor"):
-            tk.Label(window, text=label).pack(anchor="w", padx=30,
+            tk.Label(window, text=label, font=("Century Gothic", 10)).pack(anchor="w", padx=30,
                                                pady=(6, 2))
-            entry = ttk.Entry(window, width=50)
+            entry = ttk.Entry(window, width=50, font=("Century Gothic", 10))
             entry.pack(anchor="w", padx=30)
             details[label] = entry
 
@@ -1229,16 +1232,16 @@ class LABlyGUI:
         columns = ("ID", "Type", "Resource", "Date", "Time", "Status")
         controls = tk.Frame(window)
         controls.pack(fill="x", padx=10, pady=8)
-        tk.Label(controls, text="Search").pack(side="left")
-        search_entry = ttk.Entry(controls, width=20)
+        tk.Label(controls, text="Search", font=("Century Gothic", 10)).pack(side="left")
+        search_entry = ttk.Entry(controls, width=20, font=("Century Gothic", 10))
         search_entry.pack(side="left", padx=5)
-        tk.Label(controls, text="Sort column").pack(side="left", padx=(8, 0))
+        tk.Label(controls, text="Sort column", font=("Century Gothic", 10)).pack(side="left", padx=(8, 0))
         sort_column = ttk.Combobox(controls, values=columns,
                                    state="readonly", width=12)
         sort_column.set(columns[0])
         sort_column.pack(side="left", padx=5)
         sort_order = ttk.Combobox(controls, values=("Ascending", "Descending"),
-                                  state="readonly", width=12)
+                                  state="readonly", width=12, font=("Century Gothic", 10))
         sort_order.set("Ascending")
         sort_order.pack(side="left", padx=5)
 
@@ -1314,20 +1317,20 @@ class LABlyGUI:
         window.title("Equipment Reservation")
         window.geometry("420x300")
 
-        tk.Label(window, text="Equipment").pack(anchor="w", padx=30, pady=(15, 3))
+        tk.Label(window, text="Equipment", font=("Century Gothic", 10)).pack(anchor="w", padx=30, pady=(15, 3))
         equipment_names = [item["name"] for item in self.system.equipment
                            if item["available"] > 0]
         equipment = ttk.Combobox(window, values=equipment_names,
-                                 state="readonly", width=38)
+                                 state="readonly", width=38, font=("Century Gothic", 10))
         equipment.set(equipment_names[0] if equipment_names else "")
         equipment.pack(anchor="w", padx=30)
 
-        tk.Label(window, text="Quantity").pack(anchor="w", padx=30, pady=(10, 3))
-        quantity = ttk.Entry(window, width=15)
+        tk.Label(window, text="Quantity", font=("Century Gothic", 10)).pack(anchor="w", padx=30, pady=(10, 3))
+        quantity = ttk.Entry(window, width=15, font=("Century Gothic", 10))
         quantity.pack(anchor="w", padx=30)
 
         tk.Label(window, text="Use Date").pack(anchor="w", padx=30, pady=(10, 3))
-        use_date = ttk.Entry(window, width=15)
+        use_date = ttk.Entry(window, width=15, font=("Century Gothic", 10))
         use_date.insert(0, date.today().isoformat())
         use_date.pack(anchor="w", padx=30)
 
@@ -1380,11 +1383,11 @@ class LABlyGUI:
 
         controls = tk.Frame(window)
         controls.pack(fill="x", padx=10, pady=8)
-        tk.Label(controls, text="Search").pack(side="left")
-        search_entry = ttk.Entry(controls, width=22)
+        tk.Label(controls, text="Search", font=("Century Gothic", 10)).pack(side="left")
+        search_entry = ttk.Entry(controls, width=22, font=("Century Gothic", 10))
         search_entry.pack(side="left", padx=(5, 12))
 
-        tk.Label(controls, text="Sort column").pack(side="left")
+        tk.Label(controls, text="Sort column", font=("Century Gothic", 10)).pack(side="left")
         sort_column = ttk.Combobox(
             controls,
             values=columns,
@@ -1394,7 +1397,7 @@ class LABlyGUI:
         sort_column.set(columns[0])
         sort_column.pack(side="left", padx=5)
 
-        tk.Label(controls, text="Order").pack(side="left", padx=(8, 0))
+        tk.Label(controls, text="Order", font=("Century Gothic", 10)).pack(side="left", padx=(8, 0))
         sort_order = ttk.Combobox(
             controls,
             values=("Ascending", "Descending"),
@@ -1465,7 +1468,7 @@ class LABlyGUI:
         fields = {}
         for label in ("Borrower Name", "Resource", "Quantity",
                       "Condition", "Remarks"):
-            tk.Label(window, text=label).pack(anchor="w", padx=30,
+            tk.Label(window, text=label, font=("Century Gothic", 10)).pack(anchor="w", padx=30,
                                                pady=(10, 2))
             entry = ttk.Entry(window, width=38)
             entry.pack(anchor="w", padx=30)
@@ -1550,8 +1553,8 @@ class LABlyGUI:
         controls = tk.Frame(window)
         controls.pack(fill="x", padx=10, pady=(0, 10))
 
-        tk.Label(controls, text="Remarks").grid(row=0, column=0, sticky="w")
-        remarks = ttk.Entry(controls, width=55)
+        tk.Label(controls, text="Remarks", font=("Century Gothic", 10)).grid(row=0, column=0, sticky="w")
+        remarks = ttk.Entry(controls, width=55, font=("Century Gothic", 10))
         remarks.grid(row=1, column=0, padx=(0, 8))
 
         def selected_entry():
@@ -1614,16 +1617,16 @@ class LABlyGUI:
         add_frame = tk.Frame(window)
         add_frame.pack(padx=20)
 
-        tk.Label(add_frame, text="ID").grid(row=0, column=0, sticky="w")
-        lab_id = ttk.Entry(add_frame, width=12)
+        tk.Label(add_frame, text="ID", font=("Century Gothic", 10)).grid(row=0, column=0, sticky="w")
+        lab_id = ttk.Entry(add_frame, width=12, font=("Century Gothic", 10))
         lab_id.grid(row=1, column=0, padx=(0, 8))
 
-        tk.Label(add_frame, text="Name").grid(row=0, column=1, sticky="w")
-        lab_name = ttk.Entry(add_frame, width=24)
+        tk.Label(add_frame, text="Name", font=("Century Gothic", 10)).grid(row=0, column=1, sticky="w")
+        lab_name = ttk.Entry(add_frame, width=24, font=("Century Gothic", 10))
         lab_name.grid(row=1, column=1, padx=(0, 8))
 
-        tk.Label(add_frame, text="Capacity").grid(row=0, column=2, sticky="w")
-        capacity = ttk.Entry(add_frame, width=10)
+        tk.Label(add_frame, text="Capacity", font=("Century Gothic", 10)).grid(row=0, column=2, sticky="w")
+        capacity = ttk.Entry(add_frame, width=10, font=("Century Gothic", 10))
         capacity.grid(row=1, column=2)
 
         def add_lab():
@@ -1654,8 +1657,8 @@ class LABlyGUI:
         block_frame = tk.Frame(window)
         block_frame.pack(padx=20)
 
-        tk.Label(block_frame, text="Date").grid(row=0, column=0, sticky="w")
-        blocked_date = ttk.Entry(block_frame, width=15)
+        tk.Label(block_frame, text="Date", font=("Century Gothic", 10)).grid(row=0, column=0, sticky="w")
+        blocked_date = ttk.Entry(block_frame, width=15, font=("Century Gothic", 10))
         blocked_date.grid(row=1, column=0, padx=(0, 8))
 
         tk.Label(block_frame, text="Block").grid(row=0, column=1, sticky="w")
@@ -1668,16 +1671,16 @@ class LABlyGUI:
         block_type.set("Entire day")
         block_type.grid(row=1, column=1, padx=(0, 8))
 
-        tk.Label(block_frame, text="Scope").grid(row=0, column=2, sticky="w")
+        tk.Label(block_frame, text="Scope", font=("Century Gothic", 10)).grid(row=0, column=2, sticky="w")
         lab_scopes = ["All laboratories"] + [
             lab["name"] for lab in self.system.laboratories
         ]
         scope = ttk.Combobox(block_frame, values=lab_scopes,
-                             state="readonly", width=24)
+                             state="readonly", width=24, font=("Century Gothic", 10))
         scope.set("All laboratories")
         scope.grid(row=1, column=2, padx=(0, 8))
 
-        tk.Label(block_frame, text="Sessions (Ctrl-click for multiple)").grid(
+        tk.Label(block_frame, text="Sessions (Ctrl-click for multiple)", font=("Century Gothic", 10)).grid(
             row=0, column=3, sticky="w"
         )
         session_frame = tk.Frame(block_frame)
@@ -1698,7 +1701,7 @@ class LABlyGUI:
 
         reason_frame = tk.Frame(window)
         reason_frame.pack(fill="x", padx=20, pady=(8, 0))
-        tk.Label(reason_frame, text="Reason").pack(side="left")
+        tk.Label(reason_frame, text="Reason", font=("Century Gothic", 10)).pack(side="left")
         reason = ttk.Entry(reason_frame)
         reason.pack(side="left", fill="x", expand=True, padx=8)
 
@@ -1777,8 +1780,8 @@ class LABlyGUI:
         labels = ("ID", "Name", "Category", "Quantity")
         entries = {}
         for index, label in enumerate(labels):
-            tk.Label(add_frame, text=label).grid(row=0, column=index, sticky="w")
-            entry = ttk.Entry(add_frame, width=14)
+            tk.Label(add_frame, text=label, font=("Century Gothic", 10)).grid(row=0, column=index, sticky="w")
+            entry = ttk.Entry(add_frame, width=14, font=("Century Gothic", 10))
             entry.grid(row=1, column=index, padx=4)
             entries[label] = entry
 
@@ -1810,7 +1813,7 @@ class LABlyGUI:
                  font=("Arial", 14, "bold")).pack(pady=(10, 5))
         equipment_names = [item["name"] for item in self.system.equipment]
         equipment = ttk.Combobox(window, values=equipment_names,
-                                 state="readonly", width=35)
+                                 state="readonly", width=35, font=("Century Gothic", 10))
         equipment.set(equipment_names[0] if equipment_names else "")
         equipment.pack(pady=5)
         quantity = ttk.Entry(window, width=12)
@@ -1863,9 +1866,9 @@ class LABlyGUI:
             ("Username", False),
             ("Password", True),
         ):
-            tk.Label(window, text=label).pack(anchor="w", padx=40,
+            tk.Label(window, text=label, font=("Century Gothic", 10)).pack(anchor="w", padx=40,
                                                pady=(12, 2))
-            entry = ttk.Entry(window, width=32, show="*" if hidden else "")
+            entry = ttk.Entry(window, width=32, show="*" if hidden else "", font=("Century Gothic", 10))
             entry.pack(anchor="w", padx=40)
             fields[label] = entry
 
