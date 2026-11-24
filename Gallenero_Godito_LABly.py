@@ -3,7 +3,7 @@ LABly - Laboratory Reservation and Resource Management System
 Console application for students/users and administrators.
 """
 
-from datetime import date
+from datetime import date, datetime
 import tkinter as tk
 from tkinter import messagebox, ttk
 
@@ -48,6 +48,7 @@ class LABlySystem:
         self.reservations = []
         self.accountability = []
         self.logbook = []
+        self.laboratory_attendance = []
         self.next_reservation_id = 1
 
     @staticmethod
@@ -176,6 +177,27 @@ class LABlySystem:
         self.logbook.append({"username": username, "action": action,
                              "date": "2026-11-24", "time": "09:00"})
 
+    def add_laboratory_attendance(self, reservation):
+        existing = any(
+            record["reservation_id"] == reservation["id"]
+            for record in self.laboratory_attendance
+        )
+        if not existing:
+            self.laboratory_attendance.append({
+                "reservation_id": reservation["id"],
+                "username": reservation.get("username", ""),
+                "date": reservation["date"],
+                "laboratory": reservation["resource"],
+                "session": reservation["time"],
+                "researchers": reservation.get("researchers", ""),
+                "research_title": reservation.get("research_title", ""),
+                "activity": reservation.get("activity", ""),
+                "supervisor": reservation.get("supervisor", ""),
+                "login": "",
+                "logout": "",
+                "remarks": "",
+            })
+
     def laboratory_block_reason(self, lab_name, reservation_date, interval=None):
         reason = self.blocked_laboratory_dates.get(("__ALL__", reservation_date))
         if reason:
@@ -242,6 +264,14 @@ class LABlySystem:
             print("Invalid interval selection.")
             return
 
+        researchers = self.read_choice("Names of researchers: ").strip()
+        research_title = self.read_choice("Research title: ").strip()
+        activity = self.read_choice("Activity in the laboratory: ").strip()
+        supervisor = self.read_choice("Supervisor: ").strip()
+        if not all((researchers, research_title, activity, supervisor)):
+            print("All researcher logbook fields are required.")
+            return
+
         selected_intervals = []
         for number in interval_numbers:
             interval = self.LAB_INTERVALS[int(number) - 1]
@@ -283,7 +313,7 @@ class LABlySystem:
 
             reservation_id = f"RES-{self.next_reservation_id:04d}"
             self.next_reservation_id += 1
-            self.reservations.append({
+            reservation = {
                 "id": reservation_id,
                 "username": username,
                 "type": "Laboratory",
@@ -292,7 +322,13 @@ class LABlySystem:
                 "time": selected_time,
                 "quantity": 1,
                 "status": "Requested",
-            })
+                "researchers": researchers,
+                "research_title": research_title,
+                "activity": activity,
+                "supervisor": supervisor,
+            }
+            self.reservations.append(reservation)
+            self.add_laboratory_attendance(reservation)
             created.append((reservation_id, selected_time))
             self.add_log(username, f"Requested laboratory reservation {reservation_id}")
 
@@ -434,18 +470,66 @@ class LABlySystem:
                   f"{resource['name']} | Available: {resource['available']}")
 
     def view_logbook(self, username=None, admin=False):
-        rows = self.logbook if admin else [
-            entry for entry in self.logbook if entry["username"] == username
-        ]
+        if not admin:
+            print("The laboratory logbook is available only to administrators.")
+            return
+
+        rows = []
+        for entry in self.laboratory_attendance:
+            reservation = next((
+                reservation for reservation in self.reservations
+                if reservation["id"] == entry["reservation_id"]
+            ), None)
+            if reservation is None:
+                continue
+            if not admin and reservation["username"] != username:
+                continue
+            rows.append(entry)
+
         if not rows:
             print("\nLogbook is empty.")
             return
-        rows = self.search_rows(rows, ["username", "action", "date", "time"])
-        rows = self.sort_rows(rows, ["username", "action", "date", "time"])
-        print("\n--- Logbook ---")
+
+        print("\n--- Research Laboratory Logbook ---")
         for entry in rows:
-            print(f"{entry['date']} {entry['time']} | {entry['username']} | "
-                  f"{entry['action']}")
+            print(
+                f"Reservation: {entry['reservation_id']} | Username: {entry['username']} | {entry['date']} | "
+                f"{entry['laboratory']} | Session: {entry['session']} | "
+                f"Researchers: {entry['researchers']} | "
+                f"Title: {entry['research_title']} | "
+                f"Activity: {entry['activity']} | "
+                f"Supervisor: {entry['supervisor']} | "
+                f"Log in: {entry['login'] or 'Not recorded'} | "
+                f"Log out: {entry['logout'] or 'Not recorded'} | "
+                f"Remarks: {entry['remarks'] or 'None'}"
+            )
+
+        if admin:
+            print("\n1. Record researcher log in")
+            print("2. Record researcher log out")
+            print("3. Add administrator remarks")
+            print("4. Return")
+            action = self.read_choice("Select attendance action: ")
+            if action not in ("1", "2", "3"):
+                return
+
+            reservation_id = self.read_choice("Reservation ID: ").strip().upper()
+            entry = next((item for item in rows
+                          if item["reservation_id"] == reservation_id), None)
+            if entry is None:
+                print("Logbook record not found.")
+                return
+
+            if action == "1":
+                entry["login"] = datetime.now().strftime("%Y-%m-%d %H:%M")
+                print("Researcher log in recorded.")
+            elif action == "2":
+                entry["logout"] = datetime.now().strftime("%Y-%m-%d %H:%M")
+                print("Researcher log out recorded.")
+            else:
+                remarks = self.read_choice("Administrator remarks: ").strip()
+                entry["remarks"] = remarks
+                print("Administrator remarks saved.")
 
     def set_laboratory_reservations(self):
         print("\n--- Set Available Laboratory Reservations ---")
@@ -752,8 +836,7 @@ class LABlySystem:
             print("3. View Current Reservations")
             print("4. Accountability Form")
             print("5. View Available Resources")
-            print("6. Logbook System")
-            print("7. Log out")
+            print("6. Log out")
 
             choice = self.read_choice("Please choose a number: ")
             if choice == "1":
@@ -775,8 +858,6 @@ class LABlySystem:
             elif choice == "5":
                 self.view_available_resources()
             elif choice == "6":
-                self.view_logbook(username=username)
-            elif choice == "7":
                 self.add_log(username, "Logged out")
                 print("Logged out.")
                 return
@@ -983,7 +1064,6 @@ class LABlyGUI:
             ("View Current Reservations", self.gui_reservations),
             ("Submit Accountability Form", self.gui_accountability),
             ("View Available Resources", self.gui_resources),
-            ("View Logbook", self.gui_logbook),
         )
         for text, command in actions:
             ttk.Button(buttons, text=text, width=38, command=command).pack(pady=5)
@@ -991,7 +1071,7 @@ class LABlyGUI:
     def gui_laboratory_reservation(self):
         window = tk.Toplevel(self.root)
         window.title("Laboratory Reservation")
-        window.geometry("500x430")
+        window.geometry("500x660")
 
         tk.Label(window, text="Reservation Date").pack(anchor="w", padx=30, pady=(15, 3))
         date_entry = ttk.Entry(window, width=25)
@@ -1013,6 +1093,15 @@ class LABlyGUI:
         for interval in self.system.LAB_INTERVALS:
             interval_list.insert("end", interval)
         interval_list.pack(anchor="w", padx=30)
+
+        details = {}
+        for label in ("Names of Researchers", "Research Title",
+                      "Activity in the Laboratory", "Supervisor"):
+            tk.Label(window, text=label).pack(anchor="w", padx=30,
+                                               pady=(6, 2))
+            entry = ttk.Entry(window, width=50)
+            entry.pack(anchor="w", padx=30)
+            details[label] = entry
 
         def reserve():
             reservation_date = date_entry.get().strip()
@@ -1048,6 +1137,17 @@ class LABlyGUI:
             selected = interval_list.curselection()
             if not selected:
                 messagebox.showerror("No Interval", "Select at least one interval.")
+                return
+
+            attendance_details = {
+                "researchers": details["Names of Researchers"].get().strip(),
+                "research_title": details["Research Title"].get().strip(),
+                "activity": details["Activity in the Laboratory"].get().strip(),
+                "supervisor": details["Supervisor"].get().strip(),
+            }
+            if not all(attendance_details.values()):
+                messagebox.showerror("Research Details",
+                                     "Complete all researcher logbook fields.")
                 return
 
             created = []
@@ -1086,7 +1186,7 @@ class LABlyGUI:
 
                 reservation_id = f"RES-{self.system.next_reservation_id:04d}"
                 self.system.next_reservation_id += 1
-                self.system.reservations.append({
+                reservation = {
                     "id": reservation_id,
                     "username": self.username,
                     "type": "Laboratory",
@@ -1095,7 +1195,10 @@ class LABlyGUI:
                     "time": interval,
                     "quantity": 1,
                     "status": "Requested",
-                })
+                    **attendance_details,
+                }
+                self.system.reservations.append(reservation)
+                self.system.add_laboratory_attendance(reservation)
                 created.append(reservation_id)
                 self.system.add_log(
                     self.username,
@@ -1409,16 +1512,78 @@ class LABlyGUI:
         )
 
     def gui_logbook(self):
-        rows = [
-            (entry["date"], entry["time"], entry["username"], entry["action"])
-            for entry in self.system.logbook
-            if self.role == "admin" or entry["username"] == self.username
-        ]
-        self.create_table_window(
-            "Logbook",
-            ("Date", "Time", "Username", "Action"),
-            rows,
-        )
+        if self.role != "admin":
+            messagebox.showerror("Access Restricted",
+                                 "The laboratory logbook is available only to administrators.")
+            return
+
+        self.gui_laboratory_attendance()
+
+    def gui_laboratory_attendance(self):
+        window = tk.Toplevel(self.root)
+        window.title("Laboratory Logbook")
+        window.geometry("1250x520")
+
+        columns = ("Reservation", "Username", "Date", "Laboratory", "Session",
+                   "Names of Researchers", "Research Title", "Activity",
+                   "Supervisor", "Log In", "Log Out", "Remarks")
+        tree = ttk.Treeview(window, columns=columns, show="headings")
+        for column in columns:
+            tree.heading(column, text=column)
+            tree.column(column, width=115, minwidth=80,
+                        anchor="w" if column not in ("Date", "Log In", "Log Out") else "center")
+        tree.pack(fill="both", expand=True, padx=10, pady=10)
+
+        def populate():
+            for item in tree.get_children():
+                tree.delete(item)
+            for entry in self.system.laboratory_attendance:
+                tree.insert("", "end", values=(
+                    entry["reservation_id"], entry["username"], entry["date"], entry["laboratory"],
+                    entry["session"], entry["researchers"], entry["research_title"],
+                    entry["activity"], entry["supervisor"], entry["login"],
+                    entry["logout"], entry["remarks"],
+                ))
+
+        populate()
+
+        controls = tk.Frame(window)
+        controls.pack(fill="x", padx=10, pady=(0, 10))
+
+        tk.Label(controls, text="Remarks").grid(row=0, column=0, sticky="w")
+        remarks = ttk.Entry(controls, width=55)
+        remarks.grid(row=1, column=0, padx=(0, 8))
+
+        def selected_entry():
+            selected = tree.selection()
+            if not selected:
+                messagebox.showerror("Logbook", "Select a logbook record.")
+                return None
+            reservation_id = tree.item(selected[0], "values")[0]
+            return next((entry for entry in self.system.laboratory_attendance
+                         if entry["reservation_id"] == reservation_id), None)
+
+        def log_in():
+            entry = selected_entry()
+            if entry:
+                entry["login"] = datetime.now().strftime("%Y-%m-%d %H:%M")
+                populate()
+
+        def log_out():
+            entry = selected_entry()
+            if entry:
+                entry["logout"] = datetime.now().strftime("%Y-%m-%d %H:%M")
+                populate()
+
+        def save_remarks():
+            entry = selected_entry()
+            if entry:
+                entry["remarks"] = remarks.get().strip()
+                populate()
+
+        ttk.Button(controls, text="Log In", command=log_in).grid(row=1, column=1, padx=4)
+        ttk.Button(controls, text="Log Out", command=log_out).grid(row=1, column=2, padx=4)
+        ttk.Button(controls, text="Save Remarks", command=save_remarks).grid(row=1, column=3, padx=4)
 
     def show_admin_dashboard(self):
         self.clear_window()
