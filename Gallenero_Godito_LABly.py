@@ -5,6 +5,7 @@ Console application for students/users and administrators.
 
 from datetime import date, datetime
 import tkinter as tk
+from tkinter import font as tkfont
 from tkinter import messagebox, ttk
 
 
@@ -1179,6 +1180,17 @@ class LABlyGUI:
         self.system = system
         self.role = None
         self.username = None
+        available_fonts = {
+            family.casefold(): family for family in tkfont.families(root)
+        }
+        self.font_family = next(
+            (
+                available_fonts[family.casefold()]
+                for family in ("Century Gothic Paneuropean", "Century Gothic")
+                if family.casefold() in available_fonts
+            ),
+            tkfont.nametofont("TkDefaultFont").actual("family"),
+        )
 
         self.configure_styles()
 
@@ -1192,7 +1204,7 @@ class LABlyGUI:
         self.root.configure(bg=palette["background"])
         self.root.option_add("*Background", palette["background"])
         self.root.option_add("*Foreground", palette["text"])
-        self.root.option_add("*Font", ("Aptos", 10))
+        self.root.option_add("*Font", (self.font_family, 10))
         self.root.option_add("*Listbox.background", palette["surface"])
         self.root.option_add("*Listbox.foreground", palette["text"])
         self.root.option_add("*Listbox.selectBackground", palette["selection"])
@@ -1210,7 +1222,7 @@ class LABlyGUI:
             "TLabel",
             background=palette["background"],
             foreground=palette["text"],
-            font=("Aptos", 10),
+            font=(self.font_family, 10),
         )
         style.configure(
             "Card.TLabel",
@@ -1224,7 +1236,7 @@ class LABlyGUI:
         )
         style.configure(
             "TButton",
-            font=("Aptos", 10, "bold"),
+            font=(self.font_family, 10, "bold"),
             padding=(14, 9),
             background=palette["primary"],
             foreground="#FFFFFF",
@@ -1250,7 +1262,7 @@ class LABlyGUI:
         )
         style.configure(
             "Dashboard.TButton",
-            font=("Aptos", 11, "bold"),
+            font=(self.font_family, 11, "bold"),
             padding=(18, 16),
             anchor="center",
         )
@@ -1282,7 +1294,7 @@ class LABlyGUI:
             foreground=palette["text"],
             rowheight=30,
             bordercolor=palette["border"],
-            font=("Aptos", 10),
+            font=(self.font_family, 10),
         )
         style.map(
             "Treeview",
@@ -1293,7 +1305,7 @@ class LABlyGUI:
             "Treeview.Heading",
             background="#E8EEF2",
             foreground=palette["nav"],
-            font=("Aptos", 10, "bold"),
+            font=(self.font_family, 10, "bold"),
             padding=(8, 8),
         )
         style.map(
@@ -1308,7 +1320,7 @@ class LABlyGUI:
         style.configure(
             "TNotebook.Tab",
             padding=(14, 8),
-            font=("Aptos", 10, "bold"),
+            font=(self.font_family, 10, "bold"),
         )
 
     def clear_window(self):
@@ -1335,36 +1347,36 @@ class LABlyGUI:
             text="LABly",
             bg=self.COLORS["surface"],
             fg=self.COLORS["nav"],
-            font=("Aptos Display", 32, "bold"),
+            font=(self.font_family, 32, "bold"),
         ).pack(pady=(0, 4))
         tk.Label(
             card,
             text="LABORATORY RESERVATION SYSTEM",
             bg=self.COLORS["surface"],
             fg=self.COLORS["muted"],
-            font=("Aptos", 9, "bold"),
+            font=(self.font_family, 9, "bold"),
         ).pack(pady=(0, 26))
 
         tk.Label(card, text="Sign in to continue", bg=self.COLORS["surface"],
-                 fg=self.COLORS["text"], font=("Aptos", 15, "bold")).pack(
+                 fg=self.COLORS["text"], font=(self.font_family, 15, "bold")).pack(
                      anchor="w", pady=(0, 14)
                  )
         tk.Label(card, text="Role", bg=self.COLORS["surface"],
-                 fg=self.COLORS["muted"], font=("Aptos", 10, "bold")).pack(anchor="w")
+                 fg=self.COLORS["muted"], font=(self.font_family, 10, "bold")).pack(anchor="w")
         role = ttk.Combobox(
             card, values=["User", "Administrator"], state="readonly",
-            width=34, font=("Aptos", 10),
+            width=34, font=(self.font_family, 10),
         )
         role.set("User")
         role.pack(fill="x", pady=(5, 14))
 
         tk.Label(card, text="Username", bg=self.COLORS["surface"],
-                 fg=self.COLORS["muted"], font=("Aptos", 10, "bold")).pack(anchor="w")
+                 fg=self.COLORS["muted"], font=(self.font_family, 10, "bold")).pack(anchor="w")
         username = ttk.Entry(card, width=36)
         username.pack(fill="x", pady=(5, 14))
 
         tk.Label(card, text="Password", bg=self.COLORS["surface"],
-                 fg=self.COLORS["muted"], font=("Aptos", 10, "bold")).pack(anchor="w")
+                 fg=self.COLORS["muted"], font=(self.font_family, 10, "bold")).pack(anchor="w")
         password = ttk.Entry(card, width=36, show="*")
         password.pack(fill="x", pady=(5, 20))
 
@@ -1401,7 +1413,7 @@ class LABlyGUI:
         window.geometry("360x400")
         window.resizable(False, False)
 
-        tk.Label(window, text="Create Account", font=("Century Gothic", 16, "bold")).pack(pady=15)
+        tk.Label(window, text="Create Account", font=(self.font_family, 16, "bold")).pack(pady=15)
 
         fields = {}
         for label, hidden in (
@@ -1410,8 +1422,8 @@ class LABlyGUI:
             ("Password", True),
             ("Confirm Password", True),
         ):
-            tk.Label(window, text=label, font=("Century Gothic", 10)).pack(anchor="w", padx=40)
-            entry = ttk.Entry(window, width=35, show="*" if hidden else "", font=("Century Gothic", 10))
+            tk.Label(window, text=label, font=(self.font_family, 10)).pack(anchor="w", padx=40)
+            entry = ttk.Entry(window, width=35, show="*" if hidden else "", font=(self.font_family, 10))
             entry.pack(pady=(0, 8))
             fields[label] = entry
 
@@ -1450,14 +1462,14 @@ class LABlyGUI:
             text="LABly",
             bg=self.COLORS["nav"],
             fg="#FFFFFF",
-            font=("Aptos Display", 19, "bold"),
+            font=(self.font_family, 19, "bold"),
         ).pack(side="left", padx=(0, 20))
         tk.Label(
             header,
             text=title,
             bg=self.COLORS["nav"],
             fg="#DCE8EB",
-            font=("Aptos", 12),
+            font=(self.font_family, 12),
         ).pack(side="left")
         ttk.Button(
             header,
@@ -1474,14 +1486,14 @@ class LABlyGUI:
             text=heading,
             bg=self.COLORS["background"],
             fg=self.COLORS["nav"],
-            font=("Aptos Display", 23, "bold"),
+            font=(self.font_family, 23, "bold"),
         ).pack(anchor="w")
         tk.Label(
             content,
             text=subtitle,
             bg=self.COLORS["background"],
             fg=self.COLORS["muted"],
-            font=("Aptos", 11),
+            font=(self.font_family, 11),
         ).pack(anchor="w", pady=(4, 20))
 
         cards = tk.Frame(content, bg=self.COLORS["background"])
@@ -1545,23 +1557,23 @@ class LABlyGUI:
         window.title("Laboratory Reservation")
         window.geometry("500x660")
 
-        tk.Label(window, text="Reservation Date", font=("Century Gothic", 10)).pack(anchor="w", padx=30, pady=(15, 3))
-        date_entry = ttk.Entry(window, width=25,font=("Century Gothic", 10))
+        tk.Label(window, text="Reservation Date", font=(self.font_family, 10)).pack(anchor="w", padx=30, pady=(15, 3))
+        date_entry = ttk.Entry(window, width=25,font=(self.font_family, 10))
         date_entry.insert(0, date.today().isoformat())
         date_entry.pack(anchor="w", padx=30)
 
-        tk.Label(window, text="Laboratory", font=("Century Gothic", 10)).pack(anchor="w", padx=30, pady=(12, 3))
+        tk.Label(window, text="Laboratory", font=(self.font_family, 10)).pack(anchor="w", padx=30, pady=(12, 3))
         laboratory_names = [lab["name"] for lab in self.system.laboratories]
         laboratory = ttk.Combobox(window, values=laboratory_names,
-                                  state="readonly", width=38, font=("Century Gothic", 10))
+                                  state="readonly", width=38, font=(self.font_family, 10))
         laboratory.set(laboratory_names[0] if laboratory_names else "")
         laboratory.pack(anchor="w", padx=30)
 
-        tk.Label(window, text="Intervals (use Ctrl to select multiple)", font=("Century Gothic", 10)).pack(
+        tk.Label(window, text="Intervals (use Ctrl to select multiple)", font=(self.font_family, 10)).pack(
             anchor="w", padx=30, pady=(12, 3)
         )
         interval_list = tk.Listbox(window, selectmode="multiple", height=9,
-                                   exportselection=False, font=("Century Gothic", 10))
+                                   exportselection=False, font=(self.font_family, 10))
         for interval in self.system.LAB_INTERVALS:
             interval_list.insert("end", interval)
         interval_list.pack(anchor="w", padx=30)
@@ -1569,9 +1581,9 @@ class LABlyGUI:
         details = {}
         for label in ("Names of Researchers", "Research Title",
                       "Activity in the Laboratory", "Supervisor"):
-            tk.Label(window, text=label, font=("Century Gothic", 10)).pack(anchor="w", padx=30,
+            tk.Label(window, text=label, font=(self.font_family, 10)).pack(anchor="w", padx=30,
                                                pady=(6, 2))
-            entry = ttk.Entry(window, width=50, font=("Century Gothic", 10))
+            entry = ttk.Entry(window, width=50, font=(self.font_family, 10))
             entry.pack(anchor="w", padx=30)
             details[label] = entry
 
@@ -1701,16 +1713,16 @@ class LABlyGUI:
         columns = ("ID", "Type", "Resource", "Date", "Time", "Status")
         controls = tk.Frame(window)
         controls.pack(fill="x", padx=10, pady=8)
-        tk.Label(controls, text="Search", font=("Century Gothic", 10)).pack(side="left")
-        search_entry = ttk.Entry(controls, width=20, font=("Century Gothic", 10))
+        tk.Label(controls, text="Search", font=(self.font_family, 10)).pack(side="left")
+        search_entry = ttk.Entry(controls, width=20, font=(self.font_family, 10))
         search_entry.pack(side="left", padx=5)
-        tk.Label(controls, text="Sort column", font=("Century Gothic", 10)).pack(side="left", padx=(8, 0))
+        tk.Label(controls, text="Sort column", font=(self.font_family, 10)).pack(side="left", padx=(8, 0))
         sort_column = ttk.Combobox(controls, values=columns,
                                    state="readonly", width=12)
         sort_column.set(columns[0])
         sort_column.pack(side="left", padx=5)
         sort_order = ttk.Combobox(controls, values=("Ascending", "Descending"),
-                                  state="readonly", width=12, font=("Century Gothic", 10))
+                                  state="readonly", width=12, font=(self.font_family, 10))
         sort_order.set("Ascending")
         sort_order.pack(side="left", padx=5)
 
@@ -1792,7 +1804,7 @@ class LABlyGUI:
         window.title("Equipment Reservation")
         window.geometry("440x540")
 
-        tk.Label(window, text="Equipment", font=("Century Gothic", 10)).pack(
+        tk.Label(window, text="Equipment", font=(self.font_family, 10)).pack(
             anchor="w", padx=30, pady=(15, 3)
         )
         equipment_names = [
@@ -1800,28 +1812,28 @@ class LABlyGUI:
         ]
         equipment = ttk.Combobox(
             window, values=equipment_names, state="readonly", width=38,
-            font=("Century Gothic", 10),
+            font=(self.font_family, 10),
         )
         equipment.set(equipment_names[0] if equipment_names else "")
         equipment.pack(anchor="w", padx=30)
 
-        tk.Label(window, text="Quantity", font=("Century Gothic", 10)).pack(
+        tk.Label(window, text="Quantity", font=(self.font_family, 10)).pack(
             anchor="w", padx=30, pady=(10, 3)
         )
-        quantity = ttk.Entry(window, width=15, font=("Century Gothic", 10))
+        quantity = ttk.Entry(window, width=15, font=(self.font_family, 10))
         quantity.pack(anchor="w", padx=30)
 
-        tk.Label(window, text="Use Date", font=("Century Gothic", 10)).pack(
+        tk.Label(window, text="Use Date", font=(self.font_family, 10)).pack(
             anchor="w", padx=30, pady=(10, 3)
         )
-        use_date = ttk.Entry(window, width=15, font=("Century Gothic", 10))
+        use_date = ttk.Entry(window, width=15, font=(self.font_family, 10))
         use_date.insert(0, date.today().isoformat())
         use_date.pack(anchor="w", padx=30)
 
         tk.Label(
             window,
             text="Sessions (Ctrl-click or Shift-click to select multiple)",
-            font=("Century Gothic", 10),
+            font=(self.font_family, 10),
         ).pack(
             anchor="w", padx=30, pady=(10, 3)
         )
@@ -1930,11 +1942,11 @@ class LABlyGUI:
 
         controls = tk.Frame(window)
         controls.pack(fill="x", padx=10, pady=8)
-        tk.Label(controls, text="Search", font=("Century Gothic", 10)).pack(side="left")
-        search_entry = ttk.Entry(controls, width=22, font=("Century Gothic", 10))
+        tk.Label(controls, text="Search", font=(self.font_family, 10)).pack(side="left")
+        search_entry = ttk.Entry(controls, width=22, font=(self.font_family, 10))
         search_entry.pack(side="left", padx=(5, 12))
 
-        tk.Label(controls, text="Sort column", font=("Century Gothic", 10)).pack(side="left")
+        tk.Label(controls, text="Sort column", font=(self.font_family, 10)).pack(side="left")
         sort_column = ttk.Combobox(
             controls,
             values=columns,
@@ -1944,7 +1956,7 @@ class LABlyGUI:
         sort_column.set(columns[0])
         sort_column.pack(side="left", padx=5)
 
-        tk.Label(controls, text="Order", font=("Century Gothic", 10)).pack(side="left", padx=(8, 0))
+        tk.Label(controls, text="Order", font=(self.font_family, 10)).pack(side="left", padx=(8, 0))
         sort_order = ttk.Combobox(
             controls,
             values=("Ascending", "Descending"),
@@ -2015,7 +2027,7 @@ class LABlyGUI:
         fields = {}
         for label in ("Borrower Name", "Resource", "Quantity",
                       "Condition", "Remarks"):
-            tk.Label(window, text=label, font=("Century Gothic", 10)).pack(anchor="w", padx=30,
+            tk.Label(window, text=label, font=(self.font_family, 10)).pack(anchor="w", padx=30,
                                                pady=(10, 2))
             entry = ttk.Entry(window, width=38)
             entry.pack(anchor="w", padx=30)
@@ -2100,8 +2112,8 @@ class LABlyGUI:
         controls = tk.Frame(window)
         controls.pack(fill="x", padx=10, pady=(0, 10))
 
-        tk.Label(controls, text="Remarks", font=("Century Gothic", 10)).grid(row=0, column=0, sticky="w")
-        remarks = ttk.Entry(controls, width=55, font=("Century Gothic", 10))
+        tk.Label(controls, text="Remarks", font=(self.font_family, 10)).grid(row=0, column=0, sticky="w")
+        remarks = ttk.Entry(controls, width=55, font=(self.font_family, 10))
         remarks.grid(row=1, column=0, padx=(0, 8))
 
         def selected_entry():
@@ -2250,7 +2262,7 @@ class LABlyGUI:
             tk.Label(
                 add_window,
                 text="Reserved session for the user who has arrived",
-                font=("Century Gothic", 10),
+                font=(self.font_family, 10),
             ).pack(anchor="w", padx=20, pady=(18, 5))
 
             choices = {}
@@ -2273,7 +2285,7 @@ class LABlyGUI:
             tk.Label(
                 add_window,
                 text="Names of Researchers",
-                font=("Century Gothic", 10),
+                font=(self.font_family, 10),
             ).pack(anchor="w", padx=20, pady=(12, 4))
             researcher_names = ttk.Entry(add_window, width=58)
             researcher_names.pack(anchor="w", padx=20)
@@ -2376,20 +2388,20 @@ class LABlyGUI:
         window.geometry("700x560")
 
         tk.Label(window, text="Add Laboratory Schedule",
-                 font=("Arial", 14, "bold")).pack(pady=10)
+                 font=(self.font_family, 14, "bold")).pack(pady=10)
         add_frame = tk.Frame(window)
         add_frame.pack(padx=20)
 
-        tk.Label(add_frame, text="ID", font=("Century Gothic", 10)).grid(row=0, column=0, sticky="w")
-        lab_id = ttk.Entry(add_frame, width=12, font=("Century Gothic", 10))
+        tk.Label(add_frame, text="ID", font=(self.font_family, 10)).grid(row=0, column=0, sticky="w")
+        lab_id = ttk.Entry(add_frame, width=12, font=(self.font_family, 10))
         lab_id.grid(row=1, column=0, padx=(0, 8))
 
-        tk.Label(add_frame, text="Name", font=("Century Gothic", 10)).grid(row=0, column=1, sticky="w")
-        lab_name = ttk.Entry(add_frame, width=24, font=("Century Gothic", 10))
+        tk.Label(add_frame, text="Name", font=(self.font_family, 10)).grid(row=0, column=1, sticky="w")
+        lab_name = ttk.Entry(add_frame, width=24, font=(self.font_family, 10))
         lab_name.grid(row=1, column=1, padx=(0, 8))
 
-        tk.Label(add_frame, text="Capacity", font=("Century Gothic", 10)).grid(row=0, column=2, sticky="w")
-        capacity = ttk.Entry(add_frame, width=10, font=("Century Gothic", 10))
+        tk.Label(add_frame, text="Capacity", font=(self.font_family, 10)).grid(row=0, column=2, sticky="w")
+        capacity = ttk.Entry(add_frame, width=10, font=(self.font_family, 10))
         capacity.grid(row=1, column=2)
 
         def add_lab():
@@ -2416,12 +2428,12 @@ class LABlyGUI:
         ttk.Button(window, text="Add Laboratory", command=add_lab).pack(pady=10)
 
         tk.Label(window, text="Block an Entire Day or Specific Session",
-                 font=("Arial", 14, "bold")).pack(pady=(12, 5))
+                 font=(self.font_family, 14, "bold")).pack(pady=(12, 5))
         block_frame = tk.Frame(window)
         block_frame.pack(padx=20)
 
-        tk.Label(block_frame, text="Date", font=("Century Gothic", 10)).grid(row=0, column=0, sticky="w")
-        blocked_date = ttk.Entry(block_frame, width=15, font=("Century Gothic", 10))
+        tk.Label(block_frame, text="Date", font=(self.font_family, 10)).grid(row=0, column=0, sticky="w")
+        blocked_date = ttk.Entry(block_frame, width=15, font=(self.font_family, 10))
         blocked_date.grid(row=1, column=0, padx=(0, 8))
 
         tk.Label(block_frame, text="Block").grid(row=0, column=1, sticky="w")
@@ -2434,16 +2446,16 @@ class LABlyGUI:
         block_type.set("Entire day")
         block_type.grid(row=1, column=1, padx=(0, 8))
 
-        tk.Label(block_frame, text="Scope", font=("Century Gothic", 10)).grid(row=0, column=2, sticky="w")
+        tk.Label(block_frame, text="Scope", font=(self.font_family, 10)).grid(row=0, column=2, sticky="w")
         lab_scopes = ["All laboratories"] + [
             lab["name"] for lab in self.system.laboratories
         ]
         scope = ttk.Combobox(block_frame, values=lab_scopes,
-                             state="readonly", width=24, font=("Century Gothic", 10))
+                             state="readonly", width=24, font=(self.font_family, 10))
         scope.set("All laboratories")
         scope.grid(row=1, column=2, padx=(0, 8))
 
-        tk.Label(block_frame, text="Sessions (Ctrl-click for multiple)", font=("Century Gothic", 10)).grid(
+        tk.Label(block_frame, text="Sessions (Ctrl-click for multiple)", font=(self.font_family, 10)).grid(
             row=0, column=3, sticky="w"
         )
         session_frame = tk.Frame(block_frame)
@@ -2464,7 +2476,7 @@ class LABlyGUI:
 
         reason_frame = tk.Frame(window)
         reason_frame.pack(fill="x", padx=20, pady=(8, 0))
-        tk.Label(reason_frame, text="Reason", font=("Century Gothic", 10)).pack(side="left")
+        tk.Label(reason_frame, text="Reason", font=(self.font_family, 10)).pack(side="left")
         reason = ttk.Entry(reason_frame)
         reason.pack(side="left", fill="x", expand=True, padx=8)
 
@@ -2502,7 +2514,7 @@ class LABlyGUI:
         ttk.Button(window, text="Apply Block", command=block).pack(pady=10)
 
         tk.Label(window, text="Current Blocks",
-                 font=("Arial", 14, "bold")).pack(pady=(5, 5))
+                 font=(self.font_family, 14, "bold")).pack(pady=(5, 5))
         blocked = tk.Text(window, height=9, width=78)
         blocked.pack(fill="both", expand=True, padx=15, pady=(0, 10))
         blocked_items = [
@@ -2536,15 +2548,15 @@ class LABlyGUI:
         window.geometry("500x330")
 
         tk.Label(window, text="Add Equipment",
-                 font=("Arial", 14, "bold")).pack(pady=12)
+                 font=(self.font_family, 14, "bold")).pack(pady=12)
         add_frame = tk.Frame(window)
         add_frame.pack(padx=20)
 
         labels = ("ID", "Name", "Category", "Quantity")
         entries = {}
         for index, label in enumerate(labels):
-            tk.Label(add_frame, text=label, font=("Century Gothic", 10)).grid(row=0, column=index, sticky="w")
-            entry = ttk.Entry(add_frame, width=14, font=("Century Gothic", 10))
+            tk.Label(add_frame, text=label, font=(self.font_family, 10)).grid(row=0, column=index, sticky="w")
+            entry = ttk.Entry(add_frame, width=14, font=(self.font_family, 10))
             entry.grid(row=1, column=index, padx=4)
             entries[label] = entry
 
@@ -2573,10 +2585,10 @@ class LABlyGUI:
         ttk.Button(window, text="Add Equipment", command=add).pack(pady=12)
 
         tk.Label(window, text="Update Availability",
-                 font=("Arial", 14, "bold")).pack(pady=(10, 5))
+                 font=(self.font_family, 14, "bold")).pack(pady=(10, 5))
         equipment_names = [item["name"] for item in self.system.equipment]
         equipment = ttk.Combobox(window, values=equipment_names,
-                                 state="readonly", width=35, font=("Century Gothic", 10))
+                                 state="readonly", width=35, font=(self.font_family, 10))
         equipment.set(equipment_names[0] if equipment_names else "")
         equipment.pack(pady=5)
         quantity = ttk.Entry(window, width=12)
@@ -2629,9 +2641,9 @@ class LABlyGUI:
             ("Username", False),
             ("Password", True),
         ):
-            tk.Label(window, text=label, font=("Century Gothic", 10)).pack(anchor="w", padx=40,
+            tk.Label(window, text=label, font=(self.font_family, 10)).pack(anchor="w", padx=40,
                                                pady=(12, 2))
-            entry = ttk.Entry(window, width=32, show="*" if hidden else "", font=("Century Gothic", 10))
+            entry = ttk.Entry(window, width=32, show="*" if hidden else "", font=(self.font_family, 10))
             entry.pack(anchor="w", padx=40)
             fields[label] = entry
 
