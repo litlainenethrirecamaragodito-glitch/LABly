@@ -5,7 +5,6 @@ Console application for students/users and administrators.
 
 from datetime import date, datetime
 import tkinter as tk
-from tkinter import font as tkfont
 from tkinter import messagebox, ttk
 
 
@@ -41,8 +40,6 @@ class LABlySystem:
         self.equipment = [
             {"id": "EQ-001", "name": "Microscope", "category": "Science",
              "available": 10, "total": 10},
-            {"id": "EQ-002", "name": "Oven", "category": "Instrument",
-             "available": 1, "total": 1},
             {"id": "EQ-003", "name": "Digital Multimeter", "category": "Electrical",
              "available": 8, "total": 8},
             {"id": "EQ-004", "name": "Beaker Set", "category": "Science",
@@ -52,9 +49,7 @@ class LABlySystem:
         self.accountability = []
         self.logbook = []
         self.laboratory_attendance = []
-        self.instrument_use_logbook = []
         self.next_reservation_id = 1
-        self.next_instrument_log_id = 1
 
     @staticmethod
     def pause():
@@ -202,78 +197,6 @@ class LABlySystem:
                 "logout": "",
                 "remarks": "",
             })
-
-    def pending_instrument_use_sessions(self):
-        pending = []
-        for reservation in self.reservations:
-            if reservation["type"] != "Equipment":
-                continue
-            for session in self.reservation_sessions(reservation):
-                entry = next((
-                    item for item in self.instrument_use_logbook
-                    if item.get("reservation_id", item["id"]) == reservation["id"]
-                    and item["date"] == reservation["date"]
-                    and item.get("session", "") == session
-                ), None)
-                if entry is None:
-                    entry = self._create_instrument_use_entry(reservation, session)
-                if entry.get("status", "Reserved") != "Arrived":
-                    pending.append((reservation, session))
-        return pending
-
-    def reservation_sessions(self, reservation):
-        return [
-            session.strip()
-            for session in reservation.get("time", "").split(",")
-            if session.strip() in self.LAB_INTERVALS
-        ]
-
-    def _create_instrument_use_entry(self, reservation, session):
-        record_id = f"INST-{self.next_instrument_log_id:04d}"
-        self.next_instrument_log_id += 1
-        entry = {
-            "id": record_id,
-            "reservation_id": reservation["id"],
-            "username": reservation["username"],
-            "date": reservation["date"],
-            "session": session,
-            "instrument": reservation["resource"],
-            "researchers": "",
-            "login": "",
-            "logout": "",
-            "remarks": "",
-            "status": "Reserved",
-        }
-        self.instrument_use_logbook.append(entry)
-        return entry
-
-    def connect_reservation_to_instrument_logbook(self, reservation):
-        for session in self.reservation_sessions(reservation):
-            exists = any(
-                entry.get("reservation_id", entry["id"]) == reservation["id"]
-                and entry["date"] == reservation["date"]
-                and entry.get("session", "") == session
-                for entry in self.instrument_use_logbook
-            )
-            if not exists:
-                self._create_instrument_use_entry(reservation, session)
-
-    def add_instrument_use_entry(self, reservation, session, researchers):
-        if not researchers.strip():
-            raise ValueError("Names of researchers cannot be empty.")
-        entry = next((
-            item for item in self.instrument_use_logbook
-            if item.get("reservation_id", item["id"]) == reservation["id"]
-            and item["date"] == reservation["date"]
-            and item.get("session", "") == session
-        ), None)
-        if entry is None:
-            entry = self._create_instrument_use_entry(reservation, session)
-        if entry.get("status", "Reserved") == "Arrived":
-            raise ValueError("This reservation session is already in the logbook.")
-        entry["researchers"] = researchers.strip()
-        entry["status"] = "Arrived"
-        return entry
 
     def laboratory_block_reason(self, lab_name, reservation_date, interval=None):
         reason = self.blocked_laboratory_dates.get(("__ALL__", reservation_date))
@@ -430,83 +353,33 @@ class LABlySystem:
         if not choice.isdigit() or not 1 <= int(choice) <= len(matches):
             print("Invalid selection.")
             return
-        item = matches[int(choice) - 1]
 
         quantity_text = self.read_choice("Quantity: ")
         if not quantity_text.isdigit():
             print("Quantity must be a number.")
             return
         quantity = int(quantity_text)
+        item = matches[int(choice) - 1]
         if quantity < 1 or quantity > item["available"]:
             print("Invalid quantity.")
             return
-        if item["name"].strip().casefold() == "oven" and quantity != 1:
-            print("Oven quantity must be 1.")
-            return
 
-        reservation_date = self.read_choice("Use date (YYYY-MM-DD): ").strip()
-        try:
-            date.fromisoformat(reservation_date)
-        except ValueError:
-            print("Invalid date. Use YYYY-MM-DD.")
-            return
-
-        for index, interval in enumerate(self.LAB_INTERVALS, 1):
-            print(f"{index}. {interval}")
-        session_choices = self.read_choice(
-            "Select session number(s), separated by commas: "
-        )
-        selected_numbers = [choice.strip() for choice in session_choices.split(",")]
-        if not selected_numbers or any(
-            not number.isdigit()
-            or not 1 <= int(number) <= len(self.LAB_INTERVALS)
-            for number in selected_numbers
-        ):
-            print("Invalid session selection.")
-            return
-        sessions = []
-        for number in selected_numbers:
-            session = self.LAB_INTERVALS[int(number) - 1]
-            if session not in sessions:
-                sessions.append(session)
-
-        is_oven = item["name"].strip().casefold() == "oven"
-        if is_oven:
-            unavailable_sessions = [
-                session for session in sessions
-                if any(
-                    reservation["type"] == "Equipment"
-                    and reservation["resource"].strip().casefold() == "oven"
-                    and reservation["date"] == reservation_date
-                    and session in reservation.get("time", "").split(", ")
-                    for reservation in self.reservations
-                )
-            ]
-            if unavailable_sessions:
-                print("The oven is already reserved for: "
-                      + ", ".join(unavailable_sessions))
-                return
-
+        date = self.read_choice("Use date (YYYY-MM-DD): ")
         reservation_id = f"RES-{self.next_reservation_id:04d}"
         self.next_reservation_id += 1
-        if not is_oven:
-            item["available"] -= quantity
-
-        reservation = {
+        self.reservations.append({
             "id": reservation_id,
             "username": username,
             "type": "Equipment",
             "resource": item["name"],
-            "date": reservation_date,
-            "time": ", ".join(sessions),
+            "date": date,
+            "time": "Not specified",
             "quantity": quantity,
             "status": "Requested",
-        }
-        self.reservations.append(reservation)
-        self.connect_reservation_to_instrument_logbook(reservation)
+        })
+        item["available"] -= quantity
         self.add_log(username, f"Requested equipment reservation {reservation_id}")
-        print(f"Equipment reservation requested successfully ({reservation_id}) | "
-              f"{reservation_date} | {', '.join(sessions)}.")
+        print(f"Equipment reservation requested successfully ({reservation_id}).")
 
     def cancel_reservation(self, username):
         own = [reservation for reservation in self.reservations
@@ -530,16 +403,10 @@ class LABlySystem:
         if reservation["type"] == "Equipment":
             item = next((item for item in self.equipment
                          if item["name"] == reservation["resource"]), None)
-            if item and item["name"].strip().casefold() != "oven":
+            if item:
                 item["available"] += reservation["quantity"]
 
         self.reservations.remove(reservation)
-        if reservation["type"] == "Equipment":
-            self.instrument_use_logbook = [
-                entry for entry in self.instrument_use_logbook
-                if entry.get("reservation_id") != reservation_id
-                and entry["id"] != reservation_id
-            ]
         self.add_log(username, f"Cancelled reservation {reservation_id}")
         print("Reservation cancelled.")
 
@@ -662,104 +529,6 @@ class LABlySystem:
             else:
                 remarks = self.read_choice("Administrator remarks: ").strip()
                 entry["remarks"] = remarks
-                print("Administrator remarks saved.")
-
-    def manage_instrument_use_logbook(self):
-        for reservation in self.reservations:
-            if reservation["type"] == "Equipment":
-                self.connect_reservation_to_instrument_logbook(reservation)
-        while True:
-            print("\n--- Laboratory Equipment Use Logbook ---")
-            if not self.instrument_use_logbook:
-                print("No instrument-use entries.")
-            for entry in self.instrument_use_logbook:
-                print(
-                    f"{entry['id']} | Reservation: "
-                    f"{entry.get('reservation_id', 'N/A')} | "
-                    f"Reserved by: {entry.get('username', '')} | "
-                    f"{entry['date']} | {entry.get('session', '')} | "
-                    f"{entry['instrument']} | Researchers: {entry['researchers']} | "
-                    f"Status: {entry.get('status', 'Arrived')} | "
-                    f"Log in: {entry['login'] or 'Not recorded'} | "
-                    f"Log out: {entry['logout'] or 'Not recorded'} | "
-                    f"Remarks: {entry['remarks'] or 'None'}"
-                )
-
-            print("\n1. Add arriving user to the instrument logbook")
-            print("2. Record log in")
-            print("3. Record log out")
-            print("4. Add administrator remarks")
-            print("5. Return")
-            action = self.read_choice("Select action: ")
-            if action == "5":
-                return
-            if action == "1":
-                pending = self.pending_instrument_use_sessions()
-                if not pending:
-                    print("There are no reserved equipment sessions awaiting arrival.")
-                    continue
-
-                reservations = {}
-                print("\nReserved sessions not yet in the instrument logbook:")
-                for reservation, session in pending:
-                    reservations[reservation["id"]] = reservation
-                    print(
-                        f"{reservation['id']} | {reservation['username']} | "
-                        f"{reservation['date']} | {session} | {reservation['resource']}"
-                    )
-
-                reservation_id = self.read_choice(
-                    "Reservation ID for the arriving user: "
-                ).strip().upper()
-                reservation = reservations.get(reservation_id)
-                if reservation is None:
-                    print("No pending instrument session found for that reservation.")
-                    continue
-
-                sessions = [
-                    session for candidate, session in pending
-                    if candidate["id"] == reservation_id
-                ]
-                for index, session in enumerate(sessions, 1):
-                    print(f"{index}. {session}")
-                session_choice = self.read_choice("Select arrived session: ")
-                if (not session_choice.isdigit()
-                        or not 1 <= int(session_choice) <= len(sessions)):
-                    print("Invalid session.")
-                    continue
-                researchers = self.read_choice("Names of researchers: ").strip()
-                if not researchers:
-                    print("Names of researchers cannot be empty.")
-                    continue
-                entry = self.add_instrument_use_entry(
-                    reservation, sessions[int(session_choice) - 1], researchers
-                )
-                print(f"Added {reservation['username']} to the instrument logbook "
-                      f"for {entry['instrument']} ({entry['id']}).")
-                continue
-            if action not in ("2", "3", "4"):
-                print("Invalid action.")
-                continue
-
-            record_id = self.read_choice("Instrument logbook ID: ").strip().upper()
-            entry = next((item for item in self.instrument_use_logbook
-                          if item["id"] == record_id), None)
-            if entry is None:
-                print("Instrument-use record not found.")
-                continue
-            if action in ("2", "3") and entry.get("status", "Arrived") != "Arrived":
-                print("Add the arriving user to the logbook before recording attendance.")
-                continue
-            if action == "2":
-                entry["login"] = datetime.now().strftime("%Y-%m-%d %H:%M")
-                print("Instrument log in recorded.")
-            elif action == "3":
-                entry["logout"] = datetime.now().strftime("%Y-%m-%d %H:%M")
-                print("Instrument log out recorded.")
-            else:
-                entry["remarks"] = self.read_choice(
-                    "Administrator remarks: "
-                ).strip()
                 print("Administrator remarks saved.")
 
     def set_laboratory_reservations(self):
@@ -1105,9 +874,8 @@ class LABlySystem:
             print("3. View Current Reservations")
             print("4. Resource Management")
             print("5. Logbook System")
-            print("6. Equipment Use Logbook")
-            print("7. Add administrator")
-            print("8. Log out")
+            print("6. Add administrator")
+            print("7. Log out")
 
             choice = self.read_choice("Please choose a number: ")
             if choice == "1":
@@ -1121,10 +889,8 @@ class LABlySystem:
             elif choice == "5":
                 self.view_logbook(admin=True)
             elif choice == "6":
-                self.manage_instrument_use_logbook()
-            elif choice == "7":
                 self.add_administrator()
-            elif choice == "8":
+            elif choice == "7":
                 self.add_log(username, "Administrator logged out")
                 print("Logged out.")
                 return
@@ -1162,166 +928,19 @@ class LABlySystem:
 
 
 class LABlyGUI:
-    COLORS = {
-        "background": "#F3F6F8",
-        "surface": "#FFFFFF",
-        "primary": "#0F766E",
-        "primary_active": "#115E59",
-        "nav": "#12343B",
-        "text": "#1F2937",
-        "muted": "#64748B",
-        "border": "#D8E1E7",
-        "selection": "#CCFBF1",
-        "danger": "#B42318",
-    }
-
     def __init__(self, root, system):
         self.root = root
         self.system = system
         self.role = None
         self.username = None
-        available_fonts = {
-            family.casefold(): family for family in tkfont.families(root)
-        }
-        self.font_family = next(
-            (
-                available_fonts[family.casefold()]
-                for family in ("Century Gothic Paneuropean", "Century Gothic")
-                if family.casefold() in available_fonts
-            ),
-            tkfont.nametofont("TkDefaultFont").actual("family"),
-        )
 
-        self.configure_styles()
+        self.buttonstyle = ttk.Style()
+        self.buttonstyle.configure("TButton", font=("Century Gothic", 10))
 
         self.root.title("LABly - Laboratory Reservation System")
-        self.root.geometry("980x720")
-        self.root.minsize(820, 620)
+        self.root.geometry("760x520")
+        self.root.minsize(700, 480)
         self.show_login()
-
-    def configure_styles(self):
-        palette = self.COLORS
-        self.root.configure(bg=palette["background"])
-        self.root.option_add("*Background", palette["background"])
-        self.root.option_add("*Foreground", palette["text"])
-        self.root.option_add("*Font", (self.font_family, 10))
-        self.root.option_add("*Listbox.background", palette["surface"])
-        self.root.option_add("*Listbox.foreground", palette["text"])
-        self.root.option_add("*Listbox.selectBackground", palette["selection"])
-        self.root.option_add("*Listbox.selectForeground", palette["text"])
-        self.root.option_add("*Text.background", palette["surface"])
-        self.root.option_add("*Text.foreground", palette["text"])
-
-        style = ttk.Style(self.root)
-        style.theme_use("clam")
-        style.configure(
-            "TFrame",
-            background=palette["background"],
-        )
-        style.configure(
-            "TLabel",
-            background=palette["background"],
-            foreground=palette["text"],
-            font=(self.font_family, 10),
-        )
-        style.configure(
-            "Card.TLabel",
-            background=palette["surface"],
-            foreground=palette["text"],
-        )
-        style.configure(
-            "Muted.TLabel",
-            background=palette["background"],
-            foreground=palette["muted"],
-        )
-        style.configure(
-            "TButton",
-            font=(self.font_family, 10, "bold"),
-            padding=(14, 9),
-            background=palette["primary"],
-            foreground="#FFFFFF",
-            borderwidth=0,
-        )
-        style.map(
-            "TButton",
-            background=[
-                ("disabled", "#A7C6C3"),
-                ("pressed", palette["primary_active"]),
-                ("active", palette["primary_active"]),
-            ],
-            foreground=[("disabled", "#F8FAFC")],
-        )
-        style.configure(
-            "Secondary.TButton",
-            background="#E2E8F0",
-            foreground=palette["text"],
-        )
-        style.map(
-            "Secondary.TButton",
-            background=[("pressed", "#CBD5E1"), ("active", "#CBD5E1")],
-        )
-        style.configure(
-            "Dashboard.TButton",
-            font=(self.font_family, 11, "bold"),
-            padding=(18, 16),
-            anchor="center",
-        )
-        style.configure(
-            "TEntry",
-            fieldbackground=palette["surface"],
-            foreground=palette["text"],
-            padding=(9, 7),
-            bordercolor=palette["border"],
-            lightcolor=palette["border"],
-            darkcolor=palette["border"],
-        )
-        style.configure(
-            "TCombobox",
-            fieldbackground=palette["surface"],
-            foreground=palette["text"],
-            padding=(8, 6),
-            arrowcolor=palette["primary"],
-        )
-        style.map(
-            "TCombobox",
-            fieldbackground=[("readonly", palette["surface"])],
-            foreground=[("readonly", palette["text"])],
-        )
-        style.configure(
-            "Treeview",
-            background=palette["surface"],
-            fieldbackground=palette["surface"],
-            foreground=palette["text"],
-            rowheight=30,
-            bordercolor=palette["border"],
-            font=(self.font_family, 10),
-        )
-        style.map(
-            "Treeview",
-            background=[("selected", palette["selection"])],
-            foreground=[("selected", palette["text"])],
-        )
-        style.configure(
-            "Treeview.Heading",
-            background="#E8EEF2",
-            foreground=palette["nav"],
-            font=(self.font_family, 10, "bold"),
-            padding=(8, 8),
-        )
-        style.map(
-            "Treeview.Heading",
-            background=[("active", "#DCE6EB")],
-        )
-        style.configure(
-            "TNotebook",
-            background=palette["background"],
-            borderwidth=0,
-        )
-        style.configure(
-            "TNotebook.Tab",
-            padding=(14, 8),
-            font=(self.font_family, 10, "bold"),
-        )
 
     def clear_window(self):
         for widget in self.root.winfo_children():
@@ -1332,53 +951,26 @@ class LABlyGUI:
         self.role = None
         self.username = None
 
-        card = tk.Frame(
-            self.root,
-            bg=self.COLORS["surface"],
-            padx=42,
-            pady=34,
-            highlightbackground=self.COLORS["border"],
-            highlightthickness=1,
-        )
-        card.pack(expand=True, padx=24, pady=24)
+        frame = tk.Frame(self.root, padx=30, pady=20)
+        frame.pack(expand=True)
 
-        tk.Label(
-            card,
-            text="LABly",
-            bg=self.COLORS["surface"],
-            fg=self.COLORS["nav"],
-            font=(self.font_family, 32, "bold"),
-        ).pack(pady=(0, 4))
-        tk.Label(
-            card,
-            text="LABORATORY RESERVATION SYSTEM",
-            bg=self.COLORS["surface"],
-            fg=self.COLORS["muted"],
-            font=(self.font_family, 9, "bold"),
-        ).pack(pady=(0, 26))
+        tk.Label(frame, text="LABly", font=("Arial", 24, "bold")).pack(pady=(0, 5))
+        tk.Label(frame, text="Laboratory Reservation Management",
+                 font=("Century Gothic", 11)).pack(pady=(0, 20))
 
-        tk.Label(card, text="Sign in to continue", bg=self.COLORS["surface"],
-                 fg=self.COLORS["text"], font=(self.font_family, 15, "bold")).pack(
-                     anchor="w", pady=(0, 14)
-                 )
-        tk.Label(card, text="Role", bg=self.COLORS["surface"],
-                 fg=self.COLORS["muted"], font=(self.font_family, 10, "bold")).pack(anchor="w")
-        role = ttk.Combobox(
-            card, values=["User", "Administrator"], state="readonly",
-            width=34, font=(self.font_family, 10),
-        )
+        tk.Label(frame, text="Role", font=("Century Gothic", 10)).pack(anchor="w")
+        role = ttk.Combobox(frame, values=["User", "Administrator"],
+                            state="readonly", width=28, font=("Century Gothic", 9))
         role.set("User")
-        role.pack(fill="x", pady=(5, 14))
+        role.pack(pady=(0, 10))
 
-        tk.Label(card, text="Username", bg=self.COLORS["surface"],
-                 fg=self.COLORS["muted"], font=(self.font_family, 10, "bold")).pack(anchor="w")
-        username = ttk.Entry(card, width=36)
-        username.pack(fill="x", pady=(5, 14))
+        tk.Label(frame, text="Username", font=("Century Gothic", 10)).pack(anchor="w")
+        username = ttk.Entry(frame, width=30, font=("Century Gothic", 9))
+        username.pack(pady=(0, 10))
 
-        tk.Label(card, text="Password", bg=self.COLORS["surface"],
-                 fg=self.COLORS["muted"], font=(self.font_family, 10, "bold")).pack(anchor="w")
-        password = ttk.Entry(card, width=36, show="*")
-        password.pack(fill="x", pady=(5, 20))
+        tk.Label(frame, text="Password", font=("Century Gothic", 10)).pack(anchor="w")
+        password = ttk.Entry(frame, width=30, show="*", font=("Century Gothic", 10))
+        password.pack(pady=(0, 15))
 
         def login():
             selected_role = "user" if role.get() == "User" else "admin"
@@ -1399,21 +991,17 @@ class LABlyGUI:
             else:
                 self.show_admin_dashboard()
 
-        ttk.Button(card, text="Sign In", command=login).pack(fill="x", pady=(0, 8))
-        ttk.Button(
-            card,
-            text="Create User Account",
-            style="Secondary.TButton",
-            command=self.show_register_window,
-        ).pack(fill="x")
+        ttk.Button(frame, text="Log In", width=28, command=login).pack(pady=5)
+        ttk.Button(frame, text="Create User Account", width=28,
+                   command=self.show_register_window).pack(pady=5)
 
     def show_register_window(self):
         window = tk.Toplevel(self.root)
         window.title("Create User Account")
-        window.geometry("360x400")
+        window.geometry("380x330")
         window.resizable(False, False)
 
-        tk.Label(window, text="Create Account", font=(self.font_family, 16, "bold")).pack(pady=15)
+        tk.Label(window, text="Create Account", font=("Century Gothic", 16, "bold")).pack(pady=15)
 
         fields = {}
         for label, hidden in (
@@ -1422,8 +1010,8 @@ class LABlyGUI:
             ("Password", True),
             ("Confirm Password", True),
         ):
-            tk.Label(window, text=label, font=(self.font_family, 10)).pack(anchor="w", padx=40)
-            entry = ttk.Entry(window, width=35, show="*" if hidden else "", font=(self.font_family, 10))
+            tk.Label(window, text=label, font=("Century Gothic", 10)).pack(anchor="w", padx=40)
+            entry = ttk.Entry(window, width=35, show="*" if hidden else "", font=("Century Gothic", 10))
             entry.pack(pady=(0, 8))
             fields[label] = entry
 
@@ -1455,62 +1043,10 @@ class LABlyGUI:
         ttk.Button(window, text="Create Account", command=register).pack(pady=12)
 
     def make_header(self, title):
-        header = tk.Frame(self.root, bg=self.COLORS["nav"], padx=28, pady=18)
+        header = tk.Frame(self.root, padx=15, pady=10)
         header.pack(fill="x")
-        tk.Label(
-            header,
-            text="LABly",
-            bg=self.COLORS["nav"],
-            fg="#FFFFFF",
-            font=(self.font_family, 19, "bold"),
-        ).pack(side="left", padx=(0, 20))
-        tk.Label(
-            header,
-            text=title,
-            bg=self.COLORS["nav"],
-            fg="#DCE8EB",
-            font=(self.font_family, 12),
-        ).pack(side="left")
-        ttk.Button(
-            header,
-            text="Log Out",
-            style="Secondary.TButton",
-            command=self.logout,
-        ).pack(side="right")
-
-    def show_action_dashboard(self, heading, subtitle, actions):
-        content = tk.Frame(self.root, bg=self.COLORS["background"], padx=32, pady=28)
-        content.pack(fill="both", expand=True)
-        tk.Label(
-            content,
-            text=heading,
-            bg=self.COLORS["background"],
-            fg=self.COLORS["nav"],
-            font=(self.font_family, 23, "bold"),
-        ).pack(anchor="w")
-        tk.Label(
-            content,
-            text=subtitle,
-            bg=self.COLORS["background"],
-            fg=self.COLORS["muted"],
-            font=(self.font_family, 11),
-        ).pack(anchor="w", pady=(4, 20))
-
-        cards = tk.Frame(content, bg=self.COLORS["background"])
-        cards.pack(fill="both", expand=True)
-        columns = 2
-        for column in range(columns):
-            cards.grid_columnconfigure(column, weight=1, uniform="dashboard")
-
-        for index, (title, command) in enumerate(actions):
-            row, column = divmod(index, columns)
-            ttk.Button(
-                cards,
-                text=title,
-                style="Dashboard.TButton",
-                command=command,
-            ).grid(row=row, column=column, sticky="nsew", padx=7, pady=7)
-            cards.grid_rowconfigure(row, weight=1, uniform="dashboard_row")
+        tk.Label(header, text=title, font=("Century Gothic", 18, "bold")).pack(side="left")
+        ttk.Button(header, text="Log Out", command=self.logout).pack(side="right")
 
     def logout(self):
         self.system.add_log(self.username, "Logged out")
@@ -1520,60 +1056,43 @@ class LABlyGUI:
         self.clear_window()
         name = self.system.users[self.username]["name"]
         self.make_header(f"User Dashboard - {name}")
+
+        buttons = tk.Frame(self.root, padx=25, pady=15)
+        buttons.pack(expand=True)
+
         actions = (
-            (
-                "Laboratory reservation",
-                self.gui_laboratory_reservation,
-            ),
-            (
-                "Cancel reservation",
-                self.gui_cancel_reservation,
-            ),
-            (
-                "Equipment reservation",
-                self.gui_equipment_reservation,
-            ),
-            (
-                "Current reservations",
-                self.gui_reservations,
-            ),
-            (
-                "Accountability form",
-                self.gui_accountability,
-            ),
-            (
-                "Available resources",
-                self.gui_resources,
-            ),
+            ("Request Laboratory Reservation", self.gui_laboratory_reservation),
+            ("Cancel Reservation", self.gui_cancel_reservation),
+            ("Request Equipment Reservation", self.gui_equipment_reservation),
+            ("View Current Reservations", self.gui_reservations),
+            ("Submit Accountability Form", self.gui_accountability),
+            ("View Available Resources", self.gui_resources),
         )
-        self.show_action_dashboard(
-            "Welcome back",
-            "Manage your laboratory visits, equipment, and reservations.",
-            actions,
-        )
+        for text, command in actions:
+            ttk.Button(buttons, text=text, width=38, command=command).pack(pady=5)
 
     def gui_laboratory_reservation(self):
         window = tk.Toplevel(self.root)
         window.title("Laboratory Reservation")
         window.geometry("500x660")
 
-        tk.Label(window, text="Reservation Date", font=(self.font_family, 10)).pack(anchor="w", padx=30, pady=(15, 3))
-        date_entry = ttk.Entry(window, width=25,font=(self.font_family, 10))
+        tk.Label(window, text="Reservation Date", font=("Century Gothic", 10)).pack(anchor="w", padx=30, pady=(15, 3))
+        date_entry = ttk.Entry(window, width=25,font=("Century Gothic", 10))
         date_entry.insert(0, date.today().isoformat())
         date_entry.pack(anchor="w", padx=30)
 
-        tk.Label(window, text="Laboratory", font=(self.font_family, 10)).pack(anchor="w", padx=30, pady=(12, 3))
+        tk.Label(window, text="Laboratory", font=("Century Gothic", 10)).pack(anchor="w", padx=30, pady=(12, 3))
         laboratory_names = [lab["name"] for lab in self.system.laboratories]
         laboratory = ttk.Combobox(window, values=laboratory_names,
-                                  state="readonly", width=38, font=(self.font_family, 10))
+                                  state="readonly", width=38, font=("Century Gothic", 10))
         laboratory.set(laboratory_names[0] if laboratory_names else "")
         laboratory.pack(anchor="w", padx=30)
 
-        tk.Label(window, text="Intervals (use Ctrl to select multiple)", font=(self.font_family, 10)).pack(
+        tk.Label(window, text="Intervals (use Ctrl to select multiple)", font=("Century Gothic", 10)).pack(
             anchor="w", padx=30, pady=(12, 3)
         )
         interval_list = tk.Listbox(window, selectmode="multiple", height=9,
-                                   exportselection=False, font=(self.font_family, 10))
+                                   exportselection=False, font=("Century Gothic", 10))
         for interval in self.system.LAB_INTERVALS:
             interval_list.insert("end", interval)
         interval_list.pack(anchor="w", padx=30)
@@ -1581,9 +1100,9 @@ class LABlyGUI:
         details = {}
         for label in ("Names of Researchers", "Research Title",
                       "Activity in the Laboratory", "Supervisor"):
-            tk.Label(window, text=label, font=(self.font_family, 10)).pack(anchor="w", padx=30,
+            tk.Label(window, text=label, font=("Century Gothic", 10)).pack(anchor="w", padx=30,
                                                pady=(6, 2))
-            entry = ttk.Entry(window, width=50, font=(self.font_family, 10))
+            entry = ttk.Entry(window, width=50, font=("Century Gothic", 10))
             entry.pack(anchor="w", padx=30)
             details[label] = entry
 
@@ -1713,16 +1232,16 @@ class LABlyGUI:
         columns = ("ID", "Type", "Resource", "Date", "Time", "Status")
         controls = tk.Frame(window)
         controls.pack(fill="x", padx=10, pady=8)
-        tk.Label(controls, text="Search", font=(self.font_family, 10)).pack(side="left")
-        search_entry = ttk.Entry(controls, width=20, font=(self.font_family, 10))
+        tk.Label(controls, text="Search", font=("Century Gothic", 10)).pack(side="left")
+        search_entry = ttk.Entry(controls, width=20, font=("Century Gothic", 10))
         search_entry.pack(side="left", padx=5)
-        tk.Label(controls, text="Sort column", font=(self.font_family, 10)).pack(side="left", padx=(8, 0))
+        tk.Label(controls, text="Sort column", font=("Century Gothic", 10)).pack(side="left", padx=(8, 0))
         sort_column = ttk.Combobox(controls, values=columns,
                                    state="readonly", width=12)
         sort_column.set(columns[0])
         sort_column.pack(side="left", padx=5)
         sort_order = ttk.Combobox(controls, values=("Ascending", "Descending"),
-                                  state="readonly", width=12, font=(self.font_family, 10))
+                                  state="readonly", width=12, font=("Century Gothic", 10))
         sort_order.set("Ascending")
         sort_order.pack(side="left", padx=5)
 
@@ -1782,15 +1301,9 @@ class LABlyGUI:
             if reservation["type"] == "Equipment":
                 item = next((item for item in self.system.equipment
                              if item["name"] == reservation["resource"]), None)
-                if item and item["name"].strip().casefold() != "oven":
+                if item:
                     item["available"] += reservation["quantity"]
             self.system.reservations.remove(reservation)
-            if reservation["type"] == "Equipment":
-                self.system.instrument_use_logbook = [
-                    entry for entry in self.system.instrument_use_logbook
-                    if entry.get("reservation_id") != reservation_id
-                    and entry["id"] != reservation_id
-                ]
             rows.remove(reservation)
             self.system.add_log(self.username,
                                 f"Cancelled reservation {reservation_id}")
@@ -1802,57 +1315,24 @@ class LABlyGUI:
     def gui_equipment_reservation(self):
         window = tk.Toplevel(self.root)
         window.title("Equipment Reservation")
-        window.geometry("440x540")
+        window.geometry("420x300")
 
-        tk.Label(window, text="Equipment", font=(self.font_family, 10)).pack(
-            anchor="w", padx=30, pady=(15, 3)
-        )
-        equipment_names = [
-            item["name"] for item in self.system.equipment if item["available"] > 0
-        ]
-        equipment = ttk.Combobox(
-            window, values=equipment_names, state="readonly", width=38,
-            font=(self.font_family, 10),
-        )
+        tk.Label(window, text="Equipment", font=("Century Gothic", 10)).pack(anchor="w", padx=30, pady=(15, 3))
+        equipment_names = [item["name"] for item in self.system.equipment
+                           if item["available"] > 0]
+        equipment = ttk.Combobox(window, values=equipment_names,
+                                 state="readonly", width=38, font=("Century Gothic", 10))
         equipment.set(equipment_names[0] if equipment_names else "")
         equipment.pack(anchor="w", padx=30)
 
-        tk.Label(window, text="Quantity", font=(self.font_family, 10)).pack(
-            anchor="w", padx=30, pady=(10, 3)
-        )
-        quantity = ttk.Entry(window, width=15, font=(self.font_family, 10))
+        tk.Label(window, text="Quantity", font=("Century Gothic", 10)).pack(anchor="w", padx=30, pady=(10, 3))
+        quantity = ttk.Entry(window, width=15, font=("Century Gothic", 10))
         quantity.pack(anchor="w", padx=30)
 
-        tk.Label(window, text="Use Date", font=(self.font_family, 10)).pack(
-            anchor="w", padx=30, pady=(10, 3)
-        )
-        use_date = ttk.Entry(window, width=15, font=(self.font_family, 10))
+        tk.Label(window, text="Use Date").pack(anchor="w", padx=30, pady=(10, 3))
+        use_date = ttk.Entry(window, width=15, font=("Century Gothic", 10))
         use_date.insert(0, date.today().isoformat())
         use_date.pack(anchor="w", padx=30)
-
-        tk.Label(
-            window,
-            text="Sessions (Ctrl-click or Shift-click to select multiple)",
-            font=(self.font_family, 10),
-        ).pack(
-            anchor="w", padx=30, pady=(10, 3)
-        )
-        session_frame = tk.Frame(window)
-        session_frame.pack(anchor="w", padx=30)
-        session_scrollbar = ttk.Scrollbar(session_frame, orient="vertical")
-        session = tk.Listbox(
-            session_frame,
-            selectmode="extended",
-            exportselection=False,
-            height=5,
-            width=36,
-            yscrollcommand=session_scrollbar.set,
-        )
-        for interval in self.system.LAB_INTERVALS:
-            session.insert(tk.END, interval)
-        session.pack(side="left")
-        session_scrollbar.config(command=session.yview)
-        session_scrollbar.pack(side="left", fill="y")
 
         def reserve():
             item = next((item for item in self.system.equipment
@@ -1868,70 +1348,31 @@ class LABlyGUI:
                 messagebox.showerror("Quantity",
                                      f"Available quantity: {item['available']}")
                 return
-
-            date_value = use_date.get().strip()
             try:
-                date.fromisoformat(date_value)
+                date.fromisoformat(use_date.get().strip())
             except ValueError:
                 messagebox.showerror("Invalid Date", "Use YYYY-MM-DD.")
                 return
-            selected_sessions = [
-                session.get(index) for index in session.curselection()
-            ]
-            if not selected_sessions:
-                messagebox.showerror("Session Required", "Select at least one session.")
-                return
-
-            is_oven = item["name"].strip().casefold() == "oven"
-            if is_oven:
-                if amount != 1:
-                    messagebox.showerror("Oven Quantity", "Oven quantity must be 1.")
-                    return
-                unavailable_sessions = [
-                    selected_session for selected_session in selected_sessions
-                    if any(
-                        reservation["type"] == "Equipment"
-                        and reservation["resource"].strip().casefold() == "oven"
-                        and reservation["date"] == date_value
-                        and selected_session in reservation.get("time", "").split(", ")
-                        for reservation in self.system.reservations
-                    )
-                ]
-                if unavailable_sessions:
-                    messagebox.showerror(
-                        "Oven Unavailable",
-                        "The oven is already reserved for: "
-                        + ", ".join(unavailable_sessions),
-                    )
-                    return
 
             reservation_id = f"RES-{self.system.next_reservation_id:04d}"
             self.system.next_reservation_id += 1
-            if not is_oven:
-                item["available"] -= amount
-
-            reservation = {
+            self.system.reservations.append({
                 "id": reservation_id,
                 "username": self.username,
                 "type": "Equipment",
                 "resource": item["name"],
-                "date": date_value,
-                "time": ", ".join(selected_sessions),
+                "date": use_date.get().strip(),
+                "time": "Not specified",
                 "quantity": amount,
                 "status": "Requested",
-            }
-            self.system.reservations.append(reservation)
-            self.system.connect_reservation_to_instrument_logbook(reservation)
+            })
+            item["available"] -= amount
             self.system.add_log(
                 self.username,
                 f"Requested equipment reservation {reservation_id}",
             )
-            messagebox.showinfo(
-                "Equipment Reservation",
-                f"Requested successfully ({reservation_id}) on {date_value}, "
-                f"{', '.join(selected_sessions)}.",
-            )
-            window.destroy()
+            messagebox.showinfo("Equipment Reservation",
+                                f"Requested successfully ({reservation_id}).")
 
         ttk.Button(window, text="Request Equipment", command=reserve).pack(pady=15)
 
@@ -1942,11 +1383,11 @@ class LABlyGUI:
 
         controls = tk.Frame(window)
         controls.pack(fill="x", padx=10, pady=8)
-        tk.Label(controls, text="Search", font=(self.font_family, 10)).pack(side="left")
-        search_entry = ttk.Entry(controls, width=22, font=(self.font_family, 10))
+        tk.Label(controls, text="Search", font=("Century Gothic", 10)).pack(side="left")
+        search_entry = ttk.Entry(controls, width=22, font=("Century Gothic", 10))
         search_entry.pack(side="left", padx=(5, 12))
 
-        tk.Label(controls, text="Sort column", font=(self.font_family, 10)).pack(side="left")
+        tk.Label(controls, text="Sort column", font=("Century Gothic", 10)).pack(side="left")
         sort_column = ttk.Combobox(
             controls,
             values=columns,
@@ -1956,7 +1397,7 @@ class LABlyGUI:
         sort_column.set(columns[0])
         sort_column.pack(side="left", padx=5)
 
-        tk.Label(controls, text="Order", font=(self.font_family, 10)).pack(side="left", padx=(8, 0))
+        tk.Label(controls, text="Order", font=("Century Gothic", 10)).pack(side="left", padx=(8, 0))
         sort_order = ttk.Combobox(
             controls,
             values=("Ascending", "Descending"),
@@ -2027,7 +1468,7 @@ class LABlyGUI:
         fields = {}
         for label in ("Borrower Name", "Resource", "Quantity",
                       "Condition", "Remarks"):
-            tk.Label(window, text=label, font=(self.font_family, 10)).pack(anchor="w", padx=30,
+            tk.Label(window, text=label, font=("Century Gothic", 10)).pack(anchor="w", padx=30,
                                                pady=(10, 2))
             entry = ttk.Entry(window, width=38)
             entry.pack(anchor="w", padx=30)
@@ -2112,8 +1553,8 @@ class LABlyGUI:
         controls = tk.Frame(window)
         controls.pack(fill="x", padx=10, pady=(0, 10))
 
-        tk.Label(controls, text="Remarks", font=(self.font_family, 10)).grid(row=0, column=0, sticky="w")
-        remarks = ttk.Entry(controls, width=55, font=(self.font_family, 10))
+        tk.Label(controls, text="Remarks", font=("Century Gothic", 10)).grid(row=0, column=0, sticky="w")
+        remarks = ttk.Entry(controls, width=55, font=("Century Gothic", 10))
         remarks.grid(row=1, column=0, padx=(0, 8))
 
         def selected_entry():
@@ -2147,240 +1588,24 @@ class LABlyGUI:
         ttk.Button(controls, text="Log Out", command=log_out).grid(row=1, column=2, padx=4)
         ttk.Button(controls, text="Save Remarks", command=save_remarks).grid(row=1, column=3, padx=4)
 
-    def gui_instrument_use_logbook(self):
-        if self.role != "admin":
-            messagebox.showerror(
-                "Access Restricted",
-                "The instrument-use logbook is available only to administrators.",
-            )
-            return
-
-        for reservation in self.system.reservations:
-            if reservation["type"] == "Equipment":
-                self.system.connect_reservation_to_instrument_logbook(reservation)
-
-        window = tk.Toplevel(self.root)
-        window.title("Laboratory Equipment Use Logbook")
-        window.geometry("1320x560")
-        columns = (
-            "ID", "Reserved By", "Date", "Session", "Equipment",
-            "Names of Researchers", "Log In", "Log Out",
-            "Administrator Remarks", "Status",
-        )
-        table_frame = tk.Frame(window)
-        table_frame.pack(fill="both", expand=True, padx=10, pady=5)
-        tree = ttk.Treeview(table_frame, columns=columns, show="headings")
-        horizontal_scroll = ttk.Scrollbar(
-            table_frame, orient="horizontal", command=tree.xview
-        )
-        vertical_scroll = ttk.Scrollbar(
-            table_frame, orient="vertical", command=tree.yview
-        )
-        tree.configure(
-            xscrollcommand=horizontal_scroll.set,
-            yscrollcommand=vertical_scroll.set,
-        )
-        for column in columns:
-            tree.heading(column, text=column)
-            tree.column(column, width=140, minwidth=100, anchor="w")
-        tree.grid(row=0, column=0, sticky="nsew")
-        vertical_scroll.grid(row=0, column=1, sticky="ns")
-        horizontal_scroll.grid(row=1, column=0, sticky="ew")
-        table_frame.grid_rowconfigure(0, weight=1)
-        table_frame.grid_columnconfigure(0, weight=1)
-
-        def populate():
-            for item in tree.get_children():
-                tree.delete(item)
-            for entry in self.system.instrument_use_logbook:
-                tree.insert("", "end", values=(
-                    entry["id"], entry.get("username", ""), entry["date"],
-                    entry.get("session", ""), entry["instrument"],
-                    entry["researchers"], entry["login"], entry["logout"],
-                    entry["remarks"], entry.get("status", "Arrived"),
-                ))
-
-        populate()
-
-        controls = tk.Frame(window)
-        controls.pack(fill="x", padx=12, pady=(5, 12))
-        tk.Label(controls, text="Administrator Remarks").pack(side="left")
-        remarks = ttk.Entry(controls, width=55)
-        remarks.pack(side="left", padx=8)
-
-        def selected_entry():
-            selected = tree.selection()
-            if not selected:
-                messagebox.showerror(
-                    "Instrument Logbook", "Select an instrument-use record."
-                )
-                return None
-            record_id = tree.item(selected[0], "values")[0]
-            return next((entry for entry in self.system.instrument_use_logbook
-                         if entry["id"] == record_id), None)
-
-        def load_selected_remarks(_event=None):
-            selected = tree.selection()
-            if selected:
-                remarks.delete(0, tk.END)
-                remarks.insert(0, tree.item(selected[0], "values")[8])
-
-        def record_time(field, success_message):
-            entry = selected_entry()
-            if entry is not None:
-                if entry.get("status", "Arrived") != "Arrived":
-                    messagebox.showerror(
-                        "Instrument Logbook",
-                        "Add the arriving user to the logbook before recording attendance.",
-                    )
-                    return
-                entry[field] = datetime.now().strftime("%Y-%m-%d %H:%M")
-                populate()
-                messagebox.showinfo("Instrument Logbook", success_message)
-
-        def save_remarks():
-            entry = selected_entry()
-            if entry is not None:
-                entry["remarks"] = remarks.get().strip()
-                populate()
-                messagebox.showinfo(
-                    "Instrument Logbook", "Administrator remarks saved."
-                )
-
-        def add_arriving_user():
-            pending = self.system.pending_instrument_use_sessions()
-            if not pending:
-                messagebox.showinfo(
-                    "Instrument Logbook",
-                    "There are no reserved equipment sessions awaiting arrival.",
-                )
-                return
-
-            add_window = tk.Toplevel(window)
-            add_window.title("Add Arriving User to Instrument Logbook")
-            add_window.geometry("470x220")
-            tk.Label(
-                add_window,
-                text="Reserved session for the user who has arrived",
-                font=(self.font_family, 10),
-            ).pack(anchor="w", padx=20, pady=(18, 5))
-
-            choices = {}
-            for reservation, session_value in pending:
-                label = (
-                    f"{reservation['id']} | {reservation['username']} | "
-                    f"{reservation['date']} | {session_value} | "
-                    f"{reservation['resource']}"
-                )
-                choices[label] = (reservation, session_value)
-            reservation_choice = ttk.Combobox(
-                add_window,
-                values=tuple(choices),
-                state="readonly",
-                width=65,
-            )
-            reservation_choice.current(0)
-            reservation_choice.pack(anchor="w", padx=20)
-
-            tk.Label(
-                add_window,
-                text="Names of Researchers",
-                font=(self.font_family, 10),
-            ).pack(anchor="w", padx=20, pady=(12, 4))
-            researcher_names = ttk.Entry(add_window, width=58)
-            researcher_names.pack(anchor="w", padx=20)
-
-            def add_to_logbook():
-                selection = choices.get(reservation_choice.get())
-                names = researcher_names.get().strip()
-                if selection is None:
-                    messagebox.showerror(
-                        "Instrument Logbook", "Select a reserved equipment session."
-                    )
-                    return
-                if not names:
-                    messagebox.showerror(
-                        "Researchers Required", "Enter the names of the researchers."
-                    )
-                    return
-                reservation, session_value = selection
-                try:
-                    self.system.add_instrument_use_entry(
-                        reservation, session_value, names
-                    )
-                except ValueError as error:
-                    messagebox.showerror("Instrument Logbook", str(error))
-                    return
-                populate()
-                messagebox.showinfo(
-                    "Instrument Logbook",
-                    f"Added {reservation['username']} for "
-                    f"{reservation['resource']} ({session_value}).",
-                )
-                add_window.destroy()
-
-            ttk.Button(
-                add_window, text="Add User to Logbook", command=add_to_logbook
-            ).pack(pady=14)
-
-        tree.bind("<<TreeviewSelect>>", load_selected_remarks)
-        ttk.Button(
-            controls,
-            text="Add Arriving User",
-            command=add_arriving_user,
-        ).pack(side="left", padx=4)
-        ttk.Button(
-            controls, text="Record Log In",
-            command=lambda: record_time("login", "Instrument log in recorded."),
-        ).pack(side="left", padx=4)
-        ttk.Button(
-            controls, text="Record Log Out",
-            command=lambda: record_time("logout", "Instrument log out recorded."),
-        ).pack(side="left", padx=4)
-        ttk.Button(
-            controls, text="Save Remarks", command=save_remarks
-        ).pack(side="left", padx=4)
-
     def show_admin_dashboard(self):
         self.clear_window()
         name = self.system.admins[self.username]["name"]
         self.make_header(f"Administrator Dashboard - {name}")
 
+        buttons = tk.Frame(self.root, padx=25, pady=15)
+        buttons.pack(expand=True)
+
         actions = (
-            (
-                "Laboratory schedules",
-                self.gui_admin_laboratories,
-            ),
-            (
-                "Equipment management",
-                self.gui_admin_equipment,
-            ),
-            (
-                "Current reservations",
-                self.gui_reservations,
-            ),
-            (
-                "Resource management",
-                self.gui_admin_resources,
-            ),
-            (
-                "Laboratory logbook",
-                self.gui_logbook,
-            ),
-            (
-                "Equipment use logbook",
-                self.gui_instrument_use_logbook,
-            ),
-            (
-                "Add administrator",
-                self.gui_add_administrator,
-            ),
+            ("Set Laboratory Reservations", self.gui_admin_laboratories),
+            ("Set Equipment Reservations", self.gui_admin_equipment),
+            ("View Current Reservations", self.gui_reservations),
+            ("Resource Management", self.gui_admin_resources),
+            ("View Logbook", self.gui_logbook),
+            ("Add Administrator", self.gui_add_administrator),
         )
-        self.show_action_dashboard(
-            "Administrator workspace",
-            "Manage reservations, laboratory resources, and equipment activity.",
-            actions,
-        )
+        for text, command in actions:
+            ttk.Button(buttons, text=text, width=38, command=command).pack(pady=5)
 
     def gui_admin_laboratories(self):
         window = tk.Toplevel(self.root)
@@ -2388,20 +1613,20 @@ class LABlyGUI:
         window.geometry("700x560")
 
         tk.Label(window, text="Add Laboratory Schedule",
-                 font=(self.font_family, 14, "bold")).pack(pady=10)
+                 font=("Arial", 14, "bold")).pack(pady=10)
         add_frame = tk.Frame(window)
         add_frame.pack(padx=20)
 
-        tk.Label(add_frame, text="ID", font=(self.font_family, 10)).grid(row=0, column=0, sticky="w")
-        lab_id = ttk.Entry(add_frame, width=12, font=(self.font_family, 10))
+        tk.Label(add_frame, text="ID", font=("Century Gothic", 10)).grid(row=0, column=0, sticky="w")
+        lab_id = ttk.Entry(add_frame, width=12, font=("Century Gothic", 10))
         lab_id.grid(row=1, column=0, padx=(0, 8))
 
-        tk.Label(add_frame, text="Name", font=(self.font_family, 10)).grid(row=0, column=1, sticky="w")
-        lab_name = ttk.Entry(add_frame, width=24, font=(self.font_family, 10))
+        tk.Label(add_frame, text="Name", font=("Century Gothic", 10)).grid(row=0, column=1, sticky="w")
+        lab_name = ttk.Entry(add_frame, width=24, font=("Century Gothic", 10))
         lab_name.grid(row=1, column=1, padx=(0, 8))
 
-        tk.Label(add_frame, text="Capacity", font=(self.font_family, 10)).grid(row=0, column=2, sticky="w")
-        capacity = ttk.Entry(add_frame, width=10, font=(self.font_family, 10))
+        tk.Label(add_frame, text="Capacity", font=("Century Gothic", 10)).grid(row=0, column=2, sticky="w")
+        capacity = ttk.Entry(add_frame, width=10, font=("Century Gothic", 10))
         capacity.grid(row=1, column=2)
 
         def add_lab():
@@ -2428,12 +1653,12 @@ class LABlyGUI:
         ttk.Button(window, text="Add Laboratory", command=add_lab).pack(pady=10)
 
         tk.Label(window, text="Block an Entire Day or Specific Session",
-                 font=(self.font_family, 14, "bold")).pack(pady=(12, 5))
+                 font=("Arial", 14, "bold")).pack(pady=(12, 5))
         block_frame = tk.Frame(window)
         block_frame.pack(padx=20)
 
-        tk.Label(block_frame, text="Date", font=(self.font_family, 10)).grid(row=0, column=0, sticky="w")
-        blocked_date = ttk.Entry(block_frame, width=15, font=(self.font_family, 10))
+        tk.Label(block_frame, text="Date", font=("Century Gothic", 10)).grid(row=0, column=0, sticky="w")
+        blocked_date = ttk.Entry(block_frame, width=15, font=("Century Gothic", 10))
         blocked_date.grid(row=1, column=0, padx=(0, 8))
 
         tk.Label(block_frame, text="Block").grid(row=0, column=1, sticky="w")
@@ -2446,16 +1671,16 @@ class LABlyGUI:
         block_type.set("Entire day")
         block_type.grid(row=1, column=1, padx=(0, 8))
 
-        tk.Label(block_frame, text="Scope", font=(self.font_family, 10)).grid(row=0, column=2, sticky="w")
+        tk.Label(block_frame, text="Scope", font=("Century Gothic", 10)).grid(row=0, column=2, sticky="w")
         lab_scopes = ["All laboratories"] + [
             lab["name"] for lab in self.system.laboratories
         ]
         scope = ttk.Combobox(block_frame, values=lab_scopes,
-                             state="readonly", width=24, font=(self.font_family, 10))
+                             state="readonly", width=24, font=("Century Gothic", 10))
         scope.set("All laboratories")
         scope.grid(row=1, column=2, padx=(0, 8))
 
-        tk.Label(block_frame, text="Sessions (Ctrl-click for multiple)", font=(self.font_family, 10)).grid(
+        tk.Label(block_frame, text="Sessions (Ctrl-click for multiple)", font=("Century Gothic", 10)).grid(
             row=0, column=3, sticky="w"
         )
         session_frame = tk.Frame(block_frame)
@@ -2476,7 +1701,7 @@ class LABlyGUI:
 
         reason_frame = tk.Frame(window)
         reason_frame.pack(fill="x", padx=20, pady=(8, 0))
-        tk.Label(reason_frame, text="Reason", font=(self.font_family, 10)).pack(side="left")
+        tk.Label(reason_frame, text="Reason", font=("Century Gothic", 10)).pack(side="left")
         reason = ttk.Entry(reason_frame)
         reason.pack(side="left", fill="x", expand=True, padx=8)
 
@@ -2514,7 +1739,7 @@ class LABlyGUI:
         ttk.Button(window, text="Apply Block", command=block).pack(pady=10)
 
         tk.Label(window, text="Current Blocks",
-                 font=(self.font_family, 14, "bold")).pack(pady=(5, 5))
+                 font=("Arial", 14, "bold")).pack(pady=(5, 5))
         blocked = tk.Text(window, height=9, width=78)
         blocked.pack(fill="both", expand=True, padx=15, pady=(0, 10))
         blocked_items = [
@@ -2548,15 +1773,15 @@ class LABlyGUI:
         window.geometry("500x330")
 
         tk.Label(window, text="Add Equipment",
-                 font=(self.font_family, 14, "bold")).pack(pady=12)
+                 font=("Arial", 14, "bold")).pack(pady=12)
         add_frame = tk.Frame(window)
         add_frame.pack(padx=20)
 
         labels = ("ID", "Name", "Category", "Quantity")
         entries = {}
         for index, label in enumerate(labels):
-            tk.Label(add_frame, text=label, font=(self.font_family, 10)).grid(row=0, column=index, sticky="w")
-            entry = ttk.Entry(add_frame, width=14, font=(self.font_family, 10))
+            tk.Label(add_frame, text=label, font=("Century Gothic", 10)).grid(row=0, column=index, sticky="w")
+            entry = ttk.Entry(add_frame, width=14, font=("Century Gothic", 10))
             entry.grid(row=1, column=index, padx=4)
             entries[label] = entry
 
@@ -2585,10 +1810,10 @@ class LABlyGUI:
         ttk.Button(window, text="Add Equipment", command=add).pack(pady=12)
 
         tk.Label(window, text="Update Availability",
-                 font=(self.font_family, 14, "bold")).pack(pady=(10, 5))
+                 font=("Arial", 14, "bold")).pack(pady=(10, 5))
         equipment_names = [item["name"] for item in self.system.equipment]
         equipment = ttk.Combobox(window, values=equipment_names,
-                                 state="readonly", width=35, font=(self.font_family, 10))
+                                 state="readonly", width=35, font=("Century Gothic", 10))
         equipment.set(equipment_names[0] if equipment_names else "")
         equipment.pack(pady=5)
         quantity = ttk.Entry(window, width=12)
@@ -2641,9 +1866,9 @@ class LABlyGUI:
             ("Username", False),
             ("Password", True),
         ):
-            tk.Label(window, text=label, font=(self.font_family, 10)).pack(anchor="w", padx=40,
+            tk.Label(window, text=label, font=("Century Gothic", 10)).pack(anchor="w", padx=40,
                                                pady=(12, 2))
-            entry = ttk.Entry(window, width=32, show="*" if hidden else "", font=(self.font_family, 10))
+            entry = ttk.Entry(window, width=32, show="*" if hidden else "", font=("Century Gothic", 10))
             entry.pack(anchor="w", padx=40)
             fields[label] = entry
 
