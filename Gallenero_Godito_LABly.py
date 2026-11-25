@@ -64,10 +64,13 @@ class LABlySystem:
         keyword = input("\nSearch (leave blank to show all): ").strip().lower()
         if not keyword:
             return rows
-        return [
+        matches = [
             row for row in rows
             if any(keyword in str(row.get(field, "")).lower() for field in fields)
         ]
+        if not matches:
+            print("No matching record found.")
+        return matches
 
     @staticmethod
     def insertion_sort(rows, key=lambda value: str(value).lower(), reverse=False):
@@ -363,23 +366,186 @@ class LABlySystem:
         if quantity < 1 or quantity > item["available"]:
             print("Invalid quantity.")
             return
+        if item["name"].strip().casefold() == "oven" and quantity != 1:
+            print("Oven quantity must be 1.")
+            return
 
-        date = self.read_choice("Use date (YYYY-MM-DD): ")
+        reservation_date = self.read_choice("Use date (YYYY-MM-DD): ").strip()
+        try:
+            date.fromisoformat(reservation_date)
+        except ValueError:
+            print("Invalid date. Use YYYY-MM-DD.")
+            return
+
+        for index, interval in enumerate(self.LAB_INTERVALS, 1):
+            print(f"{index}. {interval}")
+        session_choices = self.read_choice(
+            "Select session number(s), separated by commas: "
+        )
+        selected_numbers = [choice.strip() for choice in session_choices.split(",")]
+        if not selected_numbers or any(
+            not number.isdigit()
+            or not 1 <= int(number) <= len(self.LAB_INTERVALS)
+            for number in selected_numbers
+        ):
+            print("Invalid session selection.")
+            return
+        sessions = []
+        for number in selected_numbers:
+            session = self.LAB_INTERVALS[int(number) - 1]
+            if session not in sessions:
+                sessions.append(session)
+
+        is_oven = item["name"].strip().casefold() == "oven"
+        if is_oven:
+            unavailable_sessions = [
+                session for session in sessions
+                if any(
+                    reservation["type"] == "Equipment"
+                    and reservation["resource"].strip().casefold() == "oven"
+                    and reservation["date"] == reservation_date
+                    and session in reservation.get("time", "").split(", ")
+                    for reservation in self.reservations
+                )
+            ]
+            if unavailable_sessions:
+                print("The oven is already reserved for: "
+                      + ", ".join(unavailable_sessions))
+                return
+
         reservation_id = f"RES-{self.next_reservation_id:04d}"
         self.next_reservation_id += 1
-        self.reservations.append({
+        if not is_oven:
+            item["available"] -= quantity
+
+        reservation = {
             "id": reservation_id,
             "username": username,
             "type": "Equipment",
             "resource": item["name"],
-            "date": date,
-            "time": "Not specified",
+            "date": reservation_date,
+            "time": ", ".join(sessions),
             "quantity": quantity,
             "status": "Requested",
-        })
-        item["available"] -= quantity
+        }
+        self.reservations.append(reservation)
+        self.connect_reservation_to_instrument_logbook(reservation)
         self.add_log(username, f"Requested equipment reservation {reservation_id}")
-        print(f"Equipment reservation requested successfully ({reservation_id}).")
+        print(f"Equipment reservation requested successfully ({reservation_id}) | "
+              f"{reservation_date} | {', '.join(sessions)}.")
+
+    def edit_laboratory_reservation(self, username):
+        own_labs = [
+            reservation for reservation in self.reservations
+            if reservation["username"] == username
+            and reservation["type"] == "Laboratory"
+        ]
+        if not own_labs:
+            print("You have no laboratory reservations to edit.")
+            return
+
+        print("\n--- Your Laboratory Reservations ---")
+        for reservation in own_labs:
+            print(f"{reservation['id']} | {reservation['resource']} | "
+                  f"{reservation['date']} | {reservation['time']} | "
+                  f"{reservation['status']}")
+
+        reservation_id = self.read_choice("Enter reservation ID to edit: ").upper()
+        reservation = next((item for item in own_labs if item["id"] == reservation_id), None)
+        if reservation is None:
+            print("Reservation not found.")
+            return
+
+        reservation_date = self.read_choice("New reservation date (YYYY-MM-DD): ").strip()
+        try:
+            date.fromisoformat(reservation_date)
+        except ValueError:
+            print("Invalid date. Use YYYY-MM-DD.")
+            return
+
+        print("\nSelect laboratory:")
+        for index, lab in enumerate(self.laboratories, 1):
+            print(f"{index}. {lab['id']} - {lab['name']} (Capacity: {lab['capacity']})")
+        lab_choice = self.read_choice("Laboratory number: ")
+        if not lab_choice.isdigit() or not 1 <= int(lab_choice) <= len(self.laboratories):
+            print("Invalid selection.")
+            return
+        lab = self.laboratories[int(lab_choice) - 1]
+
+        print("\nSelect interval:")
+        for index, interval in enumerate(self.LAB_INTERVALS, 1):
+            print(f"{index}. {interval}")
+        interval_choice = self.read_choice("Interval number: ")
+        if not interval_choice.isdigit() or not 1 <= int(interval_choice) <= len(self.LAB_INTERVALS):
+            print("Invalid selection.")
+            return
+        interval = self.LAB_INTERVALS[int(interval_choice) - 1]
+
+        block_reason = self.laboratory_block_reason(lab["name"], reservation_date, interval)
+        if block_reason:
+            print(f"This laboratory session is blocked: {block_reason}")
+            return
+
+        duplicate = any(
+            item is not reservation
+            and item["username"] == username
+            and item["type"] == "Laboratory"
+            and item["resource"] == lab["name"]
+            and item["date"] == reservation_date
+            and item["time"] == interval
+            for item in self.reservations
+        )
+        if duplicate:
+            print("You already have a reservation for this laboratory session.")
+            return
+
+        booked = sum(
+            1 for item in self.reservations
+            if item is not reservation
+            and item["type"] == "Laboratory"
+            and item["resource"] == lab["name"]
+            and item["date"] == reservation_date
+            and item["time"] == interval
+        )
+        if booked >= lab["capacity"]:
+            print("This laboratory session is full.")
+            return
+
+        researchers = self.read_choice("Names of researchers: ").strip()
+        research_title = self.read_choice("Research title: ").strip()
+        activity = self.read_choice("Activity in the laboratory: ").strip()
+        supervisor = self.read_choice("Supervisor: ").strip()
+        if not all((researchers, research_title, activity, supervisor)):
+            print("All researcher logbook fields are required.")
+            return
+
+        reservation.update({
+            "resource": lab["name"],
+            "date": reservation_date,
+            "time": interval,
+            "researchers": researchers,
+            "research_title": research_title,
+            "activity": activity,
+            "supervisor": supervisor,
+        })
+
+        attendance = next((
+            entry for entry in self.laboratory_attendance
+            if entry["reservation_id"] == reservation_id
+        ), None)
+        if attendance:
+            attendance.update({
+                "date": reservation_date,
+                "laboratory": lab["name"],
+                "session": interval,
+                "researchers": researchers,
+                "research_title": research_title,
+                "activity": activity,
+                "supervisor": supervisor,
+            })
+
+        self.add_log(username, f"Edited laboratory reservation {reservation_id}")
+        print("Laboratory reservation updated successfully.")
 
     def cancel_reservation(self, username):
         own = [reservation for reservation in self.reservations
@@ -841,11 +1007,14 @@ class LABlySystem:
             choice = self.read_choice("Please choose a number: ")
             if choice == "1":
                 print("\n1. Request laboratory")
-                print("2. Cancel laboratory/equipment reservation")
+                print("2. Edit laboratory reservation")
+                print("3. Cancel laboratory/equipment reservation")
                 action = self.read_choice("Select action: ")
                 if action == "1":
                     self.request_laboratory(username)
                 elif action == "2":
+                    self.edit_laboratory_reservation(username)
+                elif action == "3":
                     self.cancel_reservation(username)
                 else:
                     print("Invalid action.")
@@ -1045,8 +1214,46 @@ class LABlyGUI:
     def make_header(self, title):
         header = tk.Frame(self.root, padx=15, pady=10)
         header.pack(fill="x")
-        tk.Label(header, text=title, font=("Century Gothic", 18, "bold")).pack(side="left")
-        ttk.Button(header, text="Log Out", command=self.logout).pack(side="right")
+        tk.Label(
+            header,
+            text="LABly",
+            bg=self.COLORS["nav"],
+            fg="#FFFFFF",
+            font=(self.font_family, 19, "bold"),
+        ).pack(side="left", padx=(0, 20))
+        tk.Label(
+            header,
+            text=title,
+            bg=self.COLORS["nav"],
+            fg="#DCE8EB",
+            font=(self.font_family, 12),
+        ).pack(side="left")
+        ttk.Button(
+            header,
+            text="Log Out",
+            style="Secondary.TButton",
+            command=self.logout,
+        ).pack(side="right")
+
+    def show_action_dashboard(self, actions):
+        content = tk.Frame(self.root, bg=self.COLORS["background"], padx=32, pady=28)
+        content.pack(fill="both", expand=True)
+
+        cards = tk.Frame(content, bg=self.COLORS["background"])
+        cards.pack(fill="both", expand=True)
+        columns = 2
+        for column in range(columns):
+            cards.grid_columnconfigure(column, weight=1, uniform="dashboard")
+
+        for index, (title, command) in enumerate(actions):
+            row, column = divmod(index, columns)
+            ttk.Button(
+                cards,
+                text=title,
+                style="Dashboard.TButton",
+                command=command,
+            ).grid(row=row, column=column, sticky="nsew", padx=7, pady=7)
+            cards.grid_rowconfigure(row, weight=1, uniform="dashboard_row")
 
     def logout(self):
         self.system.add_log(self.username, "Logged out")
@@ -1061,15 +1268,38 @@ class LABlyGUI:
         buttons.pack(expand=True)
 
         actions = (
-            ("Request Laboratory Reservation", self.gui_laboratory_reservation),
-            ("Cancel Reservation", self.gui_cancel_reservation),
-            ("Request Equipment Reservation", self.gui_equipment_reservation),
-            ("View Current Reservations", self.gui_reservations),
-            ("Submit Accountability Form", self.gui_accountability),
-            ("View Available Resources", self.gui_resources),
+            (
+                "Laboratory Reservation",
+                self.gui_laboratory_reservation,
+            ),
+            (
+                "Edit Laboratory Reservation",
+                self.gui_edit_laboratory_reservation,
+            ),
+            (
+                "Cancel Laboratory Reservation",
+                self.gui_cancel_reservation,
+            ),
+            (
+                "Equipment Reservation",
+                self.gui_equipment_reservation,
+            ),
+            (
+                "Current Laboratory Reservations",
+                self.gui_reservations,
+            ),
+            (
+                "Accountability Form",
+                self.gui_accountability,
+            ),
+            (
+                "Available Resources",
+                self.gui_resources,
+            ),
         )
-        for text, command in actions:
-            ttk.Button(buttons, text=text, width=38, command=command).pack(pady=5)
+        self.show_action_dashboard(
+            actions,
+        )
 
     def gui_laboratory_reservation(self):
         window = tk.Toplevel(self.root)
@@ -1245,6 +1475,10 @@ class LABlyGUI:
         sort_order.set("Ascending")
         sort_order.pack(side="left", padx=5)
 
+        status_label = tk.Label(window, text="", fg="#b91c1c",
+                               font=(self.font_family, 10), anchor="w")
+        status_label.pack(fill="x", padx=10)
+
         tree = ttk.Treeview(window, columns=columns,
                             show="headings")
         for column in columns:
@@ -1277,6 +1511,9 @@ class LABlyGUI:
             )
             for item in tree.get_children():
                 tree.delete(item)
+            status_label.config(
+                text="No matching record found." if keyword and not visible_rows else ""
+            )
             for row in visible_rows:
                 tree.insert("", "end", values=(
                     row["id"], row["type"], row["resource"],
@@ -1292,7 +1529,7 @@ class LABlyGUI:
         def cancel():
             selected = tree.selection()
             if not selected:
-                messagebox.showerror("Cancel Reservation", "Select a reservation.")
+                messagebox.showerror("Cancel Laboratory Reservation", "Select a reservation.")
                 return
             reservation_id = tree.item(selected[0], "values")[0]
             reservation = next((row for row in rows if row["id"] == reservation_id), None)
@@ -1311,6 +1548,181 @@ class LABlyGUI:
             messagebox.showinfo("Cancelled", "Reservation cancelled.")
 
         ttk.Button(window, text="Cancel Selected Reservation", command=cancel).pack(pady=5)
+
+    def gui_edit_laboratory_reservation(self):
+        rows = [
+            row for row in self.system.reservations
+            if row["username"] == self.username
+            and row["type"] == "Laboratory"
+        ]
+        if not rows:
+            messagebox.showinfo("Edit Reservation", "You have no laboratory reservations to edit.")
+            return
+
+        select_window = tk.Toplevel(self.root)
+        select_window.title("Edit Laboratory Reservation")
+        select_window.geometry("560x360")
+
+        tk.Label(select_window, text="Select a laboratory reservation",
+                 font=(self.font_family, 11, "bold")).pack(anchor="w", padx=20, pady=(15, 8))
+        reservation_list = tk.Listbox(select_window, height=10,
+                                      exportselection=False,
+                                      font=(self.font_family, 10))
+        reservation_list.pack(fill="both", expand=True, padx=20)
+        for reservation in rows:
+            reservation_list.insert(
+                tk.END,
+                f"{reservation['id']} | {reservation['resource']} | "
+                f"{reservation['date']} | {reservation['time']} | "
+                f"{reservation['status']}",
+            )
+
+        def open_editor():
+            selected = reservation_list.curselection()
+            if not selected:
+                messagebox.showerror("Edit Reservation", "Select a reservation.")
+                return
+            reservation = rows[selected[0]]
+
+            window = tk.Toplevel(select_window)
+            window.title(f"Edit {reservation['id']}")
+            window.geometry("500x650")
+
+            tk.Label(window, text="Reservation Date",
+                     font=(self.font_family, 10)).pack(anchor="w", padx=30, pady=(15, 3))
+            date_entry = ttk.Entry(window, width=25, font=(self.font_family, 10))
+            date_entry.insert(0, reservation["date"])
+            date_entry.pack(anchor="w", padx=30)
+
+            tk.Label(window, text="Laboratory",
+                     font=(self.font_family, 10)).pack(anchor="w", padx=30, pady=(12, 3))
+            laboratory_names = [lab["name"] for lab in self.system.laboratories]
+            laboratory = ttk.Combobox(window, values=laboratory_names,
+                                      state="readonly", width=38,
+                                      font=(self.font_family, 10))
+            laboratory.set(reservation["resource"] if reservation["resource"] in laboratory_names
+                           else laboratory_names[0] if laboratory_names else "")
+            laboratory.pack(anchor="w", padx=30)
+
+            tk.Label(window, text="Interval",
+                     font=(self.font_family, 10)).pack(anchor="w", padx=30, pady=(12, 3))
+            interval = ttk.Combobox(window, values=self.system.LAB_INTERVALS,
+                                    state="readonly", width=38,
+                                    font=(self.font_family, 10))
+            interval.set(reservation["time"])
+            interval.pack(anchor="w", padx=30)
+
+            details = {}
+            detail_values = (
+                ("Names of Researchers", "researchers"),
+                ("Research Title", "research_title"),
+                ("Activity in the Laboratory", "activity"),
+                ("Supervisor", "supervisor"),
+            )
+            for label, key in detail_values:
+                tk.Label(window, text=label, font=(self.font_family, 10)).pack(
+                    anchor="w", padx=30, pady=(8, 2)
+                )
+                entry = ttk.Entry(window, width=50, font=(self.font_family, 10))
+                entry.insert(0, reservation.get(key, ""))
+                entry.pack(anchor="w", padx=30)
+                details[label] = entry
+
+            def save():
+                reservation_date = date_entry.get().strip()
+                try:
+                    date.fromisoformat(reservation_date)
+                except ValueError:
+                    messagebox.showerror("Invalid Date", "Use the YYYY-MM-DD format.")
+                    return
+
+                lab = next((item for item in self.system.laboratories
+                            if item["name"] == laboratory.get()), None)
+                if lab is None:
+                    messagebox.showerror("Invalid Laboratory", "Select a laboratory.")
+                    return
+
+                selected_interval = interval.get()
+                if selected_interval not in self.system.LAB_INTERVALS:
+                    messagebox.showerror("Invalid Interval", "Select an interval.")
+                    return
+
+                block_reason = self.system.laboratory_block_reason(
+                    lab["name"], reservation_date, selected_interval
+                )
+                if block_reason:
+                    messagebox.showerror("Session Blocked", block_reason)
+                    return
+
+                duplicate = any(
+                    item is not reservation
+                    and item["username"] == self.username
+                    and item["type"] == "Laboratory"
+                    and item["resource"] == lab["name"]
+                    and item["date"] == reservation_date
+                    and item["time"] == selected_interval
+                    for item in self.system.reservations
+                )
+                if duplicate:
+                    messagebox.showerror("Duplicate Reservation",
+                                         "You already reserved this laboratory session.")
+                    return
+
+                booked = sum(
+                    1 for item in self.system.reservations
+                    if item is not reservation
+                    and item["type"] == "Laboratory"
+                    and item["resource"] == lab["name"]
+                    and item["date"] == reservation_date
+                    and item["time"] == selected_interval
+                )
+                if booked >= lab["capacity"]:
+                    messagebox.showerror("Full Session", "This laboratory session is full.")
+                    return
+
+                attendance_details = {
+                    "researchers": details["Names of Researchers"].get().strip(),
+                    "research_title": details["Research Title"].get().strip(),
+                    "activity": details["Activity in the Laboratory"].get().strip(),
+                    "supervisor": details["Supervisor"].get().strip(),
+                }
+                if not all(attendance_details.values()):
+                    messagebox.showerror("Research Details",
+                                         "Complete all researcher logbook fields.")
+                    return
+
+                reservation.update({
+                    "resource": lab["name"],
+                    "date": reservation_date,
+                    "time": selected_interval,
+                    **attendance_details,
+                })
+
+                attendance = next((
+                    entry for entry in self.system.laboratory_attendance
+                    if entry["reservation_id"] == reservation["id"]
+                ), None)
+                if attendance:
+                    attendance.update({
+                        "date": reservation_date,
+                        "laboratory": lab["name"],
+                        "session": selected_interval,
+                        **attendance_details,
+                    })
+
+                self.system.add_log(
+                    self.username,
+                    f"Edited laboratory reservation {reservation['id']}",
+                )
+                messagebox.showinfo("Reservation Updated",
+                                    "Laboratory reservation updated successfully.")
+                window.destroy()
+                select_window.destroy()
+
+            ttk.Button(window, text="Save Changes", command=save).pack(pady=12)
+
+        ttk.Button(select_window, text="Edit Selected Reservation",
+                   command=open_editor).pack(pady=12)
 
     def gui_equipment_reservation(self):
         window = tk.Toplevel(self.root)
@@ -1333,6 +1745,30 @@ class LABlyGUI:
         use_date = ttk.Entry(window, width=15, font=("Century Gothic", 10))
         use_date.insert(0, date.today().isoformat())
         use_date.pack(anchor="w", padx=30)
+
+        tk.Label(
+            window,
+            text="Sessions (Ctrl-click to select multiple)",
+            font=(self.font_family, 10),
+        ).pack(
+            anchor="w", padx=30, pady=(10, 3)
+        )
+        session_frame = tk.Frame(window)
+        session_frame.pack(anchor="w", padx=30)
+        session_scrollbar = ttk.Scrollbar(session_frame, orient="vertical")
+        session = tk.Listbox(
+            session_frame,
+            selectmode="extended",
+            exportselection=False,
+            height=5,
+            width=36,
+            yscrollcommand=session_scrollbar.set,
+        )
+        for interval in self.system.LAB_INTERVALS:
+            session.insert(tk.END, interval)
+        session.pack(side="left")
+        session_scrollbar.config(command=session.yview)
+        session_scrollbar.pack(side="left", fill="y")
 
         def reserve():
             item = next((item for item in self.system.equipment
@@ -1407,6 +1843,10 @@ class LABlyGUI:
         sort_order.set("Ascending")
         sort_order.pack(side="left", padx=5)
 
+        status_label = tk.Label(window, text="", fg="#b91c1c",
+                               font=(self.font_family, 10), anchor="w")
+        status_label.pack(fill="x", padx=10)
+
         tree = ttk.Treeview(window, columns=tuple(columns), show="headings")
         for column in columns:
             tree.heading(column, text=column)
@@ -1436,6 +1876,9 @@ class LABlyGUI:
 
             for item in tree.get_children():
                 tree.delete(item)
+            status_label.config(
+                text="No matching record found." if keyword and not visible_rows else ""
+            )
             for row in visible_rows:
                 tree.insert("", "end", values=row)
 
@@ -1454,7 +1897,7 @@ class LABlyGUI:
             if self.role == "admin" or row["username"] == self.username
         ]
         self.create_table_window(
-            "Current Reservations",
+            "Current Laboratory Reservations",
             ("ID", "Username", "Type", "Resource", "Date", "Time",
              "Quantity", "Status"),
             rows,
@@ -1597,15 +2040,38 @@ class LABlyGUI:
         buttons.pack(expand=True)
 
         actions = (
-            ("Set Laboratory Reservations", self.gui_admin_laboratories),
-            ("Set Equipment Reservations", self.gui_admin_equipment),
-            ("View Current Reservations", self.gui_reservations),
-            ("Resource Management", self.gui_admin_resources),
-            ("View Logbook", self.gui_logbook),
-            ("Add Administrator", self.gui_add_administrator),
+            (
+                "Laboratory Schedules",
+                self.gui_admin_laboratories,
+            ),
+            (
+                "Equipment Management",
+                self.gui_admin_equipment,
+            ),
+            (
+                "Current Laboratory Reservations",
+                self.gui_reservations,
+            ),
+            (
+                "Resource Management",
+                self.gui_admin_resources,
+            ),
+            (
+                "Laboratory Logbook",
+                self.gui_logbook,
+            ),
+            (
+                "Equipment Use Logbook",
+                self.gui_instrument_use_logbook,
+            ),
+            (
+                "Add Administrator",
+                self.gui_add_administrator,
+            ),
         )
-        for text, command in actions:
-            ttk.Button(buttons, text=text, width=38, command=command).pack(pady=5)
+        self.show_action_dashboard(
+            actions,
+        )
 
     def gui_admin_laboratories(self):
         window = tk.Toplevel(self.root)
